@@ -298,6 +298,57 @@ function parseCPacketAuthorize(buffer, prevCommand) {
 }
 
 /**
+ * Create Register packet body using bit-level precision
+ * @returns {Buffer} Register packet body
+ */
+function createRegisterPacketBody() {
+    const body = Buffer.alloc(57);  // Allocate enough space for the body
+    let offset = 0;
+    let bitOffset = 0;
+
+    function writeBits(value, bits) {
+        let isBigInt = typeof value === 'bigint';
+
+        while (bits > 0) {
+            const availableBits = 8 - (bitOffset % 8);
+            const bitsToWrite = Math.min(availableBits, bits);
+            const mask = (1n << BigInt(bitsToWrite)) - 1n;
+
+            // Shift based on whether the value is BigInt or Number
+            const shiftedValue = isBigInt
+                ? (value >> BigInt(bits - bitsToWrite)) & mask
+                : (value >> (bits - bitsToWrite)) & Number(mask);
+
+            // Write the shifted value to the buffer
+            body[offset] |= Number(shiftedValue) << (availableBits - bitsToWrite);
+
+            bitOffset += bitsToWrite;
+            bits -= bitsToWrite;
+
+            if (bitOffset % 8 === 0) {
+                offset++;
+            }
+        }
+    }
+
+    // Writing values bit by bit
+    writeBits(33882126, 32);         // CLIENT_PROTOCOL_VERSION (32 bits)
+    writeBits(1208025285, 32);       // CLIENT_VERSION (32 bits)
+    writeBits(6, 32);                // CLIENT_TYPE (32 bits)
+    writeBits(587989143, 32);        // APP_VERSION (32 bits)
+    writeBits(49537, 32);            // VOCODER_AND_SERVICES_MASK (32 bits)
+    writeBits(50442, 16);            // CONTROL_PORT (16 bits)
+    writeBits(50443, 16);            // AUDIO_PORT (16 bits)
+    writeBits(2, 8);                 // INITIAL_STATE (8 bits)
+    writeBits(0n, 64);               // DIRECTORY_NUMBER (64 bits, BigInt)
+    writeBits(0n, 64);               // MOBILE_SUBSCRIBER_ID (64 bits, BigInt)
+    writeBits(0n, 64);               // MOBILE_EQUIPMENT_ID (64 bits, BigInt)
+    writeBits(356648000n, 64);       // DEVICE_ID (64 bits, BigInt)
+
+    return body;
+}
+
+/**
  * Handle incoming packets
  * @param {Buffer} msg - Received message buffer
  */
@@ -335,6 +386,8 @@ function handleAckPacket(packet) {
  * @param {Buffer} packet - Packet to send
  */
 function sendPacket(packet) {
+    printPacket(packet);  // Call printPacket before sending the packet
+
     client.send(packet, server.port, server.ip, (err) => {
         if (err) {
             console.error('Error sending packet:', err);
@@ -342,6 +395,23 @@ function sendPacket(packet) {
             console.log(`Packet sent to ${server.ip}:${server.port}`);
         }
     });
+}
+
+/**
+ * Convert a buffer to a bit string in a nicely formatted way
+ * @param {Buffer} packet - The packet buffer to be converted to bits
+ */
+function printPacket(packet) {
+    // Convert the packet to a binary string and format it into groups of 8 bits
+    const bitString = Array.from(packet)
+        .map(byte => byte.toString(2).padStart(8, '0'))  // Convert each byte to binary (8 bits) and pad with zeros
+        .join(' ')  // Join the bytes into a single string with space-separated groups of 8 bits
+    
+    // Print the formatted output
+    console.log('=============');
+    console.log('The packet that was sent (bits):');
+    console.log(bitString);
+    console.log('=============');
 }
 
 /**
@@ -372,8 +442,10 @@ function createKeepAlivePacket(bChannelAcquisition) {
  */
 function sendRegisterPacket() {
     const header = createHeader(COMMAND_REGISTER);
-    console.log(`Client -> Server: Sending Register packet (${header.length} bytes)`);
-    sendPacket(header);
+    const body = createRegisterPacketBody();  // Create the body with the specified values
+    const fullPacket = Buffer.concat([header, body]);
+    console.log(`Client -> Server: Sending Register packet (${fullPacket.length} bytes)`);
+    sendPacket(fullPacket);
     sequenceMinor++;
 }
 
