@@ -1,6 +1,7 @@
 import dgram from 'dgram';  // Import dgram as an ES6 module
 import { toBufferBE } from 'bigint-buffer';  // Import the function from bigint-buffer
 import { calcResponse } from './cryptoUtils.js';  // Import your own module
+import { writeBits } from './utils.js';
 
 const client = dgram.createSocket('udp4');
 
@@ -303,47 +304,21 @@ function parseCPacketAuthorize(buffer, prevCommand) {
  */
 function createRegisterPacketBody() {
     const body = Buffer.alloc(57);  // Allocate enough space for the body
-    let offset = 0;
-    let bitOffset = 0;
+    let state = { offset: 0, bitOffset: 0 };
 
-    function writeBits(value, bits) {
-        let isBigInt = typeof value === 'bigint';
-
-        while (bits > 0) {
-            const availableBits = 8 - (bitOffset % 8);
-            const bitsToWrite = Math.min(availableBits, bits);
-            const mask = (1n << BigInt(bitsToWrite)) - 1n;
-
-            // Shift based on whether the value is BigInt or Number
-            const shiftedValue = isBigInt
-                ? (value >> BigInt(bits - bitsToWrite)) & mask
-                : (value >> (bits - bitsToWrite)) & Number(mask);
-
-            // Write the shifted value to the buffer
-            body[offset] |= Number(shiftedValue) << (availableBits - bitsToWrite);
-
-            bitOffset += bitsToWrite;
-            bits -= bitsToWrite;
-
-            if (bitOffset % 8 === 0) {
-                offset++;
-            }
-        }
-    }
-
-    // Writing values bit by bit
-    writeBits(33882126, 32);         // CLIENT_PROTOCOL_VERSION (32 bits)
-    writeBits(1208025285, 32);       // CLIENT_VERSION (32 bits)
-    writeBits(6, 32);                // CLIENT_TYPE (32 bits)
-    writeBits(587989143, 32);        // APP_VERSION (32 bits)
-    writeBits(49537, 32);            // VOCODER_AND_SERVICES_MASK (32 bits)
-    writeBits(50442, 16);            // CONTROL_PORT (16 bits)
-    writeBits(50443, 16);            // AUDIO_PORT (16 bits)
-    writeBits(2, 8);                 // INITIAL_STATE (8 bits)
-    writeBits(0n, 64);               // DIRECTORY_NUMBER (64 bits, BigInt)
-    writeBits(0n, 64);               // MOBILE_SUBSCRIBER_ID (64 bits, BigInt)
-    writeBits(0n, 64);               // MOBILE_EQUIPMENT_ID (64 bits, BigInt)
-    writeBits(356648000n, 64);       // DEVICE_ID (64 bits, BigInt)
+    // Writing values bit by bit using the imported writeBits function
+    writeBits(body, 33882126, 32, state);  // CLIENT_PROTOCOL_VERSION (32 bits)
+    writeBits(body, 1208025285, 32, state); // CLIENT_VERSION (32 bits)
+    writeBits(body, 6, 32, state);          // CLIENT_TYPE (32 bits)
+    writeBits(body, 587989143, 32, state);  // APP_VERSION (32 bits)
+    writeBits(body, 49537, 32, state);      // VOCODER_AND_SERVICES_MASK (32 bits)
+    writeBits(body, 64269, 16, state);      // CONTROL_PORT (16 bits)
+    writeBits(body, 64270, 16, state);      // AUDIO_PORT (16 bits)
+    writeBits(body, 2, 8, state);           // INITIAL_STATE (8 bits)
+    writeBits(body, 0n, 64, state);         // DIRECTORY_NUMBER (64 bits, BigInt)
+    writeBits(body, 0n, 64, state);         // MOBILE_SUBSCRIBER_ID (64 bits, BigInt)
+    writeBits(body, 0n, 64, state);         // MOBILE_EQUIPMENT_ID (64 bits, BigInt)
+    writeBits(body, 20589453n, 64, state);  // DEVICE_ID (64 bits, BigInt)
 
     return body;
 }
@@ -353,6 +328,10 @@ function createRegisterPacketBody() {
  * @param {Buffer} msg - Received message buffer
  */
 function handlePacket(msg) {
+    console.log(`Received packet: Command ${(msg.readUInt8(22) >> 2) & 0x3F} (${msg.length} bytes)`);
+
+    // Print the received packet in bit format
+    printPacket(msg, "recieved");
     const command = (msg.readUInt8(22) >> 2) & 0x3F;
     console.log(`Received packet: Command ${command} (${msg.length} bytes)`);
 
@@ -386,7 +365,7 @@ function handleAckPacket(packet) {
  * @param {Buffer} packet - Packet to send
  */
 function sendPacket(packet) {
-    printPacket(packet);  // Call printPacket before sending the packet
+    printPacket(packet, "sent");  // Call printPacket before sending the packet
 
     client.send(packet, server.port, server.ip, (err) => {
         if (err) {
@@ -401,15 +380,15 @@ function sendPacket(packet) {
  * Convert a buffer to a bit string in a nicely formatted way
  * @param {Buffer} packet - The packet buffer to be converted to bits
  */
-function printPacket(packet) {
+function printPacket(packet, senderOrReceiver) {
     // Convert the packet to a binary string and format it into groups of 8 bits
     const bitString = Array.from(packet)
         .map(byte => byte.toString(2).padStart(8, '0'))  // Convert each byte to binary (8 bits) and pad with zeros
         .join(' ')  // Join the bytes into a single string with space-separated groups of 8 bits
-    
+
     // Print the formatted output
     console.log('=============');
-    console.log('The packet that was sent (bits):');
+    console.log(`The packet that was ${senderOrReceiver} (bits):`);
     console.log(bitString);
     console.log('=============');
 }
