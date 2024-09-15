@@ -17,6 +17,9 @@ const COMMAND_ACK = 1;
 let previousCommand = 5; // Assuming the initial command is ecRegister (5)
 let sequenceMinor = 0;
 
+// New variable to store the senderId
+let lastSenderId = 0;
+
 // Server management
 let server = { ip: SERVER_IP, port: SERVER_PORT, id: null };
 
@@ -60,7 +63,7 @@ function readString(buffer, bitOffset, numBits) {
 function createHeader(command) {
     const header = Buffer.alloc(23);
     header.writeUInt32BE(0x0200001C, 0);  // Protocol Version
-    toBufferBE(BigInt(0x0000000000000000), 8).copy(header, 4);  // Recipient ID
+    toBufferBE(BigInt(lastSenderId), 8).copy(header, 4);  // Recipient ID
     toBufferBE(BigInt('0x0DDD2935029EA54F'), 8).copy(header, 12);  // Sender ID
     header.writeUInt8(0, 20);  // Sequence (major)
     header.writeUInt8(sequenceMinor, 21);  // Sequence (minor)
@@ -250,6 +253,10 @@ function createRegisterPacketBody() {
  */
 function handlePacket(msg) {
     console.log(`Received packet: Command ${(msg.readUInt8(22) >> 2) & 0x3F} (${msg.length} bytes)`);
+
+    // Extract the senderId from the header (assume it starts at offset 12)
+    lastSenderId = msg.readBigUInt64BE(12);  // Adjust this offset as needed
+    console.log(`Extracted senderId: ${lastSenderId.toString(16)}`);
 
     // Print the received packet in bit format
     printPacket(msg, "recieved");
