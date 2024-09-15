@@ -1,7 +1,7 @@
 import dgram from 'dgram';  // Import dgram as an ES6 module
 import { toBufferBE } from 'bigint-buffer';  // Import the function from bigint-buffer
-import { calcResponse } from './cryptoUtils.js';  // Import your own module
-import { writeBits } from './utils.js';
+import { base64Encode, calcResponse } from './cryptoUtils.js';  // Import your own module
+import { getSIPMethod, writeBits } from './utils.js';
 
 const client = dgram.createSocket('udp4');
 
@@ -20,29 +20,6 @@ let sequenceMinor = 0;
 // Server management
 let server = { ip: SERVER_IP, port: SERVER_PORT, id: null };
 
-/**
- * Custom Base64 encoding function
- * @param {Buffer} srcBuffer - Source buffer to encode
- * @returns {string} Base64 encoded string
- */
-function base64Encode(srcBuffer) {
-    const cvt = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    const dest = [];
-    let i = 0;
-    while (i < srcBuffer.length) {
-        const byte0 = srcBuffer[i];
-        const byte1 = i + 1 < srcBuffer.length ? srcBuffer[i + 1] : 0;
-        const byte2 = i + 2 < srcBuffer.length ? srcBuffer[i + 2] : 0;
-        dest.push(
-            cvt[byte0 & 0x3F],
-            cvt[(byte0 >> 6) | ((byte1 & 0x0F) << 2)],
-            i + 1 < srcBuffer.length ? cvt[(byte1 >> 4) | ((byte2 & 0x03) << 4)] : '=',
-            i + 2 < srcBuffer.length ? cvt[byte2 >> 2] : '='
-        );
-        i += 3;
-    }
-    return dest.join('');
-}
 
 /**
  * Helper function to read a specific number of bits
@@ -73,62 +50,6 @@ function readString(buffer, bitOffset, numBits) {
         }
     }
     return str.trim();
-}
-
-/**
- * Get SIP method based on command
- * @param {number} cmd - Command number
- * @returns {string} SIP method
- */
-function GetSIPMethod(cmd) {
-    switch (cmd) {
-        case 1: // ecAck
-        case 3: // ecAccept
-        case 4: // ecReject
-            return "ACK";
-        case 38: // ecAuthorize
-        case 39: // ecReRegister
-            return "FORBIDDEN";
-        case 5: // ecRegister
-        case 6: // ecUnregister
-        case 7: // ecKeepAlive
-            return "REGISTER";
-        case 7: // ecApproved
-            return "APPROVED";
-        case 8: // ecPocUriAction
-        case 9: // ecCreateAdHoc
-        case 10: // ecCreateAdHocEx
-        case 11: // ecRedirectJoin
-        case 12: // ecJoinEx
-        case 13: // ecJoin
-        case 14: // ecPending
-        case 15: // ecNewSession
-            return "INVITE";
-        case 16: // ecLeave
-        case 17: // ecEndSession
-            return "BYE";
-        case 21: // ecPABSyncRequest
-        case 22: // ecSubscribe
-            return "SUBSCRIBE";
-        case 23: // ecEnablePTT
-        case 24: // ecDisablePTT
-        case 25: // ecControlPTT
-        case 26: // ecForward
-        case 27: // ecPABGroupList
-        case 28: // ecPABContactList
-        case 29: // ecPABGroupIDList
-        case 30: // ecPABStateList
-            return "NOTIFY";
-        case 31: // ecPABSearch
-        case 32: // ecPABSearchOrg
-        case 33: // ecPABSearchResults
-        case 34: // ecPABSearchOrgResults
-        case 35: // ecPABSessionUpdatesList
-        case 36: // ecDirSesLog
-            return "INFO";
-        default:
-            return "ERROR";
-    }
 }
 
 /**
@@ -258,7 +179,7 @@ function parseCPacketAuthorize(buffer, prevCommand) {
     // Set username and password for response calculation
     const username = "999000000000075087";
     const password = "12345";
-    const method = GetSIPMethod(prevCommand || 0);
+    const method = getSIPMethod(prevCommand || 0);
 
     // Calculate the response
     const response = calcResponse(
