@@ -2,17 +2,20 @@ import dgram from 'dgram';  // Import dgram as an ES6 module
 import { toBufferBE } from 'bigint-buffer';  // Import the function from bigint-buffer
 import { base64Encode, calcResponse } from './cryptoUtils.js';  // Import your own module
 import { getSIPMethod, writeBits } from './utils.js';
+import os from 'os';
 
 const client = dgram.createSocket('udp4');
 
 // Server details
-const SERVER_IP = '82.166.254.181';
+//const SERVER_IP = '82.166.254.181';
+const SERVER_IP = '192.168.50.149';
 const SERVER_PORT = 25000;
 
 // Command for ecAuthorize
 const COMMAND_AUTHORIZE = 38;
 const COMMAND_REGISTER = 5;
 const COMMAND_ACK = 1;
+let DEVICE_ID = 0;
 
 let previousCommand = 5; // Assuming the initial command is ecRegister (5)
 let sequenceMinor = 0;
@@ -23,6 +26,11 @@ let lastSenderId = 0;
 // Server management
 let server = { ip: SERVER_IP, port: SERVER_PORT, id: null };
 
+// Function to get current time in milliseconds (equivalent to iprs_get_time_ms)
+function getCurrentTimeMs() {
+    const uptimeMs = Math.floor(os.uptime() * 1000); // Get system uptime in milliseconds
+    return BigInt(uptimeMs);
+}
 
 /**
  * Helper function to read a specific number of bits
@@ -67,7 +75,11 @@ function createHeader(command) {
     toBufferBE(BigInt('0x0DDD2935029EA54F'), 8).copy(header, 12);  // Sender ID
     header.writeUInt8(0, 20);  // Sequence (major)
     header.writeUInt8(sequenceMinor, 21);  // Sequence (minor)
-    header.writeUInt8((command << 2) | 0x0, 22);  // Command + Flags
+
+    // Modify the last byte to set the unused bit to 1
+    const commandByte = (command << 2) | 0x1;  // Set the last bit to 1
+    header.writeUInt8(commandByte, 22);  // Command + Flags + Unused bit
+
     return header;
 }
 
@@ -86,8 +98,8 @@ function createHeader(command) {
  * @param {number} passType - Password type
  * @returns {Buffer} CPacketAuthorize buffer
  */
-function createCPacketAuthorize(algorithm, authMethod, uri, realm, nonce, opaque, method, response, username, deviceId, passType) {
-    const buffer = Buffer.alloc(240);
+function createCPacketAuthorize(algorithm, authMethod, uri, realm, nonce, opaque, method, response, username, deviceId1, passType) {
+    const buffer = Buffer.alloc(239);
     let offset = 0;
     let bitOffset = 0;
 
@@ -130,10 +142,12 @@ function createCPacketAuthorize(algorithm, authMethod, uri, realm, nonce, opaque
     offset += 16;
     bitOffset = offset * 8;
     writeString(username, 63);
-    buffer.writeBigUInt64BE(BigInt(deviceId), offset);
-    offset += 8;
-    bitOffset = offset * 8;
-    writeBits(passType, 4);
+
+    //const deviceId = getCurrentTimeMs();
+    buffer.writeBigUInt64BE(DEVICE_ID, offset);
+    // offset += 8;
+    // bitOffset = offset * 8;
+    // writeBits(passType, 4);
 
     return buffer;
 }
@@ -145,7 +159,7 @@ function createCPacketAuthorize(algorithm, authMethod, uri, realm, nonce, opaque
  * @returns {Object} Parsed packet
  */
 function parseCPacketAuthorize(buffer, prevCommand) {
-    console.log(`Server -> Client: Received CPacketAuthorize (${buffer.length} bytes)`);
+    //console.log(`Server -> Client: Received CPacketAuthorize (${buffer.length} bytes)`);
 
     let bitOffset = 0;
     const parsedPacket = {
@@ -208,7 +222,7 @@ function parseCPacketAuthorize(buffer, prevCommand) {
         method,
         response,
         username,
-        parsedPacket.EAUTH_DEVICE_ID,
+        DEVICE_ID,  // Use the default or appropriate DeviceId
         parsedPacket.EAUTH_PASS_TYPE
     );
 
@@ -216,7 +230,7 @@ function parseCPacketAuthorize(buffer, prevCommand) {
     const header = createHeader(COMMAND_AUTHORIZE);
     const fullPacket = Buffer.concat([header, packetBody]);
 
-    console.log(`Client -> Server: Sending CPacketAuthorize (${fullPacket.length} bytes)`);
+    //console.log(`Client -> Server: Sending CPacketAuthorize (${fullPacket.length} bytes)`);
     sendPacket(fullPacket);
 
     return parsedPacket;
@@ -227,6 +241,8 @@ function parseCPacketAuthorize(buffer, prevCommand) {
  * @returns {Buffer} Register packet body
  */
 function createRegisterPacketBody() {
+    DEVICE_ID = getCurrentTimeMs();
+
     const body = Buffer.alloc(57);  // Allocate enough space for the body
     let state = { offset: 0, bitOffset: 0 };
 
@@ -236,13 +252,13 @@ function createRegisterPacketBody() {
     writeBits(body, 6, 32, state);          // CLIENT_TYPE (32 bits)
     writeBits(body, 587989143, 32, state);  // APP_VERSION (32 bits)
     writeBits(body, 49537, 32, state);      // VOCODER_AND_SERVICES_MASK (32 bits)
-    writeBits(body, 64269, 16, state);      // CONTROL_PORT (16 bits)
-    writeBits(body, 64270, 16, state);      // AUDIO_PORT (16 bits)
+    writeBits(body, 57457, 16, state);      // CONTROL_PORT (16 bits)
+    writeBits(body, 57458, 16, state);      // AUDIO_PORT (16 bits)
     writeBits(body, 2, 8, state);           // INITIAL_STATE (8 bits)
     writeBits(body, 0n, 64, state);         // DIRECTORY_NUMBER (64 bits, BigInt)
     writeBits(body, 0n, 64, state);         // MOBILE_SUBSCRIBER_ID (64 bits, BigInt)
     writeBits(body, 0n, 64, state);         // MOBILE_EQUIPMENT_ID (64 bits, BigInt)
-    writeBits(body, 20589453n, 64, state);  // DEVICE_ID (64 bits, BigInt)
+    writeBits(body, DEVICE_ID, 64, state);  // DEVICE_ID (64 bits, BigInt)
 
     return body;
 }
@@ -252,7 +268,7 @@ function createRegisterPacketBody() {
  * @param {Buffer} msg - Received message buffer
  */
 function handlePacket(msg) {
-    console.log(`Received packet: Command ${(msg.readUInt8(22) >> 2) & 0x3F} (${msg.length} bytes)`);
+    //console.log(`Received packet: Command ${(msg.readUInt8(22) >> 2) & 0x3F} (${msg.length} bytes)`);
 
     // Extract the senderId from the header (assume it starts at offset 12)
     lastSenderId = msg.readBigUInt64BE(12);  // Adjust this offset as needed
@@ -293,6 +309,7 @@ function handleAckPacket(packet) {
  * @param {Buffer} packet - Packet to send
  */
 function sendPacket(packet) {
+    console.log(`Client -> Server: (${packet.length} bytes)`);
     printPacket(packet, "sent");  // Call printPacket before sending the packet
 
     client.send(packet, server.port, server.ip, (err) => {
@@ -326,7 +343,7 @@ function printPacket(packet, senderOrReceiver) {
  * @param {boolean} bChannelAcquisition - Channel acquisition flag
  */
 function sendKeepAlive(bChannelAcquisition = false) {
-    isDormant = false;
+    //isDormant = false;
 
     const packet = createKeepAlivePacket(bChannelAcquisition);
     console.log(`Client -> Server: Sending Keep Alive packet (${packet.length} bytes)`);
@@ -351,7 +368,7 @@ function sendRegisterPacket() {
     const header = createHeader(COMMAND_REGISTER);
     const body = createRegisterPacketBody();  // Create the body with the specified values
     const fullPacket = Buffer.concat([header, body]);
-    console.log(`Client -> Server: Sending Register packet (${fullPacket.length} bytes)`);
+    //console.log(`Client -> Server: Sending Register packet (${fullPacket.length} bytes)`);
     sendPacket(fullPacket);
     sequenceMinor++;
 }
@@ -370,7 +387,7 @@ function handleRegisterResponse() {
             clearTimeout(timeout);
             client.removeListener('message', onMessage);
 
-            console.log(`Received response from ${rinfo.address}:${rinfo.port} (${msg.length} bytes)`);
+            //console.log(`Received response from ${rinfo.address}:${rinfo.port} (${msg.length} bytes)`);
             handlePacket(msg);
             resolve();
         }
@@ -384,7 +401,7 @@ function handleRegisterResponse() {
  */
 function initializeClient() {
     client.on('message', (msg, rinfo) => {
-        console.log(`Received message from ${rinfo.address}:${rinfo.port} (${msg.length} bytes)`);
+        //console.log(`Received message from ${rinfo.address}:${rinfo.port} (${msg.length} bytes)`);
         handlePacket(msg);
     });
 
