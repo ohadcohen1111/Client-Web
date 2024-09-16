@@ -20,6 +20,11 @@ let DEVICE_ID = 0;
 let previousCommand = 5; // Assuming the initial command is ecRegister (5)
 let sequenceMinor = 0;
 
+// Add these variables at the top of your file
+let isRegistered = false;
+let authState = 'UNAUTHORIZED';
+let currentServerID = 0;
+
 // New variable to store the senderId
 let lastSenderId = 0;
 
@@ -68,13 +73,13 @@ function readString(buffer, bitOffset, numBits) {
  * @param {number} command - Command number
  * @returns {Buffer} Header buffer
  */
-function createHeader(command) {
+function createHeader(command, seqMinor = sequenceMinor, seqMajor = 0) {
     const header = Buffer.alloc(23);
     header.writeUInt32BE(0x0200001C, 0);  // Protocol Version
     toBufferBE(BigInt(lastSenderId), 8).copy(header, 4);  // Recipient ID
     toBufferBE(BigInt('0x0DDD2935029EA54F'), 8).copy(header, 12);  // Sender ID
-    header.writeUInt8(0, 20);  // Sequence (major)
-    header.writeUInt8(sequenceMinor, 21);  // Sequence (minor)
+    header.writeUInt8(seqMajor, 20);  // Sequence (major)
+    header.writeUInt8(seqMinor, 21);  // Sequence (minor)
 
     // Modify the last byte to set the unused bit to 1
     const commandByte = (command << 2) | 0x1;  // Set the last bit to 1
@@ -285,11 +290,14 @@ function handlePacket(msg) {
         parseCPacketAuthorize(body, previousCommand);
     } else if (command === COMMAND_ACK) {
         console.log('Received ACK packet');
-        handleAckPacket(msg);
+        const body = msg.slice(23);  // The body starts after the 23-byte header
+        handleAckPacket(body);
     } else {
         console.log(`Received command: ${command}`);
         previousCommand = command;  // Update the previous command
     }
+
+    previousCommand = command;
 }
 
 /**
@@ -297,12 +305,51 @@ function handlePacket(msg) {
  * @param {Buffer} packet - ACK packet buffer
  */
 function handleAckPacket(packet) {
-    // Check if it's an immediate ACK after registration
+    console.log('Parsing ACK packet');
+
+    let offset = 0; // Start at the beginning of the packet body
+
+    // Parse ACK packet fields
+    const lastArxSec = readBits(packet, offset, 64); // 8 bytes (64 bits) for LAST_ARX_SEC
+    offset += 64;
+
+    const systemMode = readBits(packet, offset, 8); // 1 byte (8 bits) for SYSTEM_MODE
+    offset += 8;
+
+    const serverID = readBits(packet, offset, 64); // 8 bytes (64 bits) for Server ID
+
+    console.log('ACK Packet Contents:');
+    console.log(`LAST_ARX_SEC: ${lastArxSec}`);
+    console.log(`SYSTEM_MODE: ${systemMode}`);
+    console.log(`Server ID: ${serverID}`);
+
+    // Handle based on previous command
     if (previousCommand === COMMAND_REGISTER) {
-        console.log('Received immediate ACK after registration');
+        console.log('Received ACK after registration');
+        isRegistered = true;
+    } else if (previousCommand === COMMAND_AUTHORIZE) {
+        console.log('Received ACK after authorization');
+        authState = 'AUTHORIZED';
+        sendRegisterPacket(0, 1);
     }
+
+    // Update server ID if needed
+    // if (serverID !== 0n && serverID !== BigInt(currentServerID)) {
+    //     console.log(`Server ID changed from ${currentServerID} to ${serverID}`);
+    //     currentServerID = Number(serverID);
+    // }
+
+    // Implement any other necessary state changes or actions based on the ACK
+    //updateClientState();
 }
 
+// Helper function to update client state
+function updateClientState() {
+    if (isRegistered && authState === 'AUTHORIZED') {
+        console.log('Client fully registered and authorized');
+        // Implement any necessary actions for a fully operational state
+    }
+}
 
 /**
  * Send a packet to the server
@@ -364,8 +411,8 @@ function createKeepAlivePacket(bChannelAcquisition) {
 /**
  * Send initial Register packet
  */
-function sendRegisterPacket() {
-    const header = createHeader(COMMAND_REGISTER);
+function sendRegisterPacket(seqMinor = sequenceMinor, seqMajor = 0) {
+    const header = createHeader(COMMAND_REGISTER, seqMinor, seqMajor);
     const body = createRegisterPacketBody();  // Create the body with the specified values
     const fullPacket = Buffer.concat([header, body]);
     //console.log(`Client -> Server: Sending Register packet (${fullPacket.length} bytes)`);
