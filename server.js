@@ -1,24 +1,20 @@
 import dgram from 'dgram';  // Import dgram as an ES6 module
 import { toBufferBE } from 'bigint-buffer';  // Import the function from bigint-buffer
 import { base64Encode, calcResponse } from './cryptoUtils.js';  // Import your own module
-import { getSIPMethod, writeBits } from './utils.js';
+import { getSIPMethod, writeBits, ECommand } from './utils.js';
 import os from 'os';
 
 const client = dgram.createSocket('udp4');
 
 // Server details
-//const SERVER_IP = '82.166.254.181';
+const SERVER_IP = '82.166.254.181';
 //const SERVER_IP = '192.168.50.149';
-const SERVER_IP = '192.168.1.207';
+//const SERVER_IP = '192.168.1.207';
 const SERVER_PORT = 25000;
 
-// Command for ecAuthorize
-const COMMAND_AUTHORIZE = 38;
-const COMMAND_REGISTER = 5;
-const COMMAND_ACK = 1;
 let DEVICE_ID = 0;
 
-let previousCommand = 5; // Assuming the initial command is ecRegister (5)
+let previousCommand = ECommand.ecRegister; // Assuming the initial command is ecRegister (5)
 let sequenceMinor = 0;
 
 // Add these variables at the top of your file
@@ -233,7 +229,7 @@ function parseCPacketAuthorize(buffer, prevCommand) {
     );
 
     sequenceMinor++;
-    const header = createHeader(COMMAND_AUTHORIZE);
+    const header = createHeader(ECommand.ecAuthorize);
     const fullPacket = Buffer.concat([header, packetBody]);
 
     //console.log(`Client -> Server: Sending CPacketAuthorize (${fullPacket.length} bytes)`);
@@ -285,11 +281,11 @@ function handlePacket(msg) {
     const command = (msg.readUInt8(22) >> 2) & 0x3F;
     console.log(`Received packet: Command ${command} (${msg.length} bytes)`);
 
-    if (command === COMMAND_AUTHORIZE) {
+    if (command === ECommand.ecAuthorize) {
         console.log('Received ecAuthorize packet');
         const body = msg.slice(23);  // The body starts after the 23-byte header
         parseCPacketAuthorize(body, previousCommand);
-    } else if (command === COMMAND_ACK) {
+    } else if (command === ECommand.ecAck) {
         console.log('Received ACK packet');
         const body = msg.slice(23);  // The body starts after the 23-byte header
         handleAckPacket(body);
@@ -325,10 +321,10 @@ function handleAckPacket(packet) {
     console.log(`Server ID: ${serverID}`);
 
     // Handle based on previous command
-    if (previousCommand === COMMAND_REGISTER) {
+    if (previousCommand === ECommand.ecRegister) {
         console.log('Received ACK after registration');
         isRegistered = true;
-    } else if (previousCommand === COMMAND_AUTHORIZE) {
+    } else if (previousCommand === ECommand.ecAuthorize) {
         console.log('Received ACK after authorization');
         authState = 'AUTHORIZED';
         sendRegisterPacket(0, 1);
@@ -396,7 +392,7 @@ function createKeepAlivePacket(bChannelAcquisition) {
  * Send initial Register packet
  */
 function sendRegisterPacket(seqMinor = sequenceMinor, seqMajor = 0) {
-    const header = createHeader(COMMAND_REGISTER, seqMinor, seqMajor);
+    const header = createHeader(ECommand.ecRegister, seqMinor, seqMajor);
     const body = createRegisterPacketBody();  // Create the body with the specified values
     const fullPacket = Buffer.concat([header, body]);
     //console.log(`Client -> Server: Sending Register packet (${fullPacket.length} bytes)`);
