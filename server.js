@@ -8,7 +8,8 @@ const client = dgram.createSocket('udp4');
 
 // Server details
 //const SERVER_IP = '82.166.254.181';
-const SERVER_IP = '192.168.50.149';
+//const SERVER_IP = '192.168.50.149';
+const SERVER_IP = '192.168.1.207';
 const SERVER_PORT = 25000;
 
 // Command for ecAuthorize
@@ -425,10 +426,10 @@ function sendRegisterPacket(seqMinor = sequenceMinor, seqMajor = 0) {
  */
 function handleRegisterResponse() {
     return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-            client.removeListener('message', onMessage);
-            reject(new Error('Timeout waiting for Register response'));
-        }, 5000); // 5 seconds timeout
+        // const timeout = setTimeout(() => {
+        //     client.removeListener('message', onMessage);
+        //     reject(new Error('Timeout waiting for Register response'));
+        // }, 5000); // 5 seconds timeout
 
         function onMessage(msg, rinfo) {
             clearTimeout(timeout);
@@ -469,12 +470,12 @@ async function runClient() {
         sendRegisterPacket();
 
         console.log('Waiting for Register response...');
-        await handleRegisterResponse();
+        //await handleRegisterResponse();
 
         console.log('Starting Keep Alive loop...');
-        setInterval(() => {
-            sendKeepAlive();
-        }, 7000); // Send Keep Alive every 30 seconds
+        // setInterval(() => {
+        //     sendKeepAlive();
+        // }, 7000); // Send Keep Alive every 30 seconds
     } catch (error) {
         console.error('Error in client operation:', error);
     }
