@@ -333,23 +333,6 @@ function handleAckPacket(packet) {
         authState = 'AUTHORIZED';
         sendRegisterPacket(0, 1);
     }
-
-    // Update server ID if needed
-    // if (serverID !== 0n && serverID !== BigInt(currentServerID)) {
-    //     console.log(`Server ID changed from ${currentServerID} to ${serverID}`);
-    //     currentServerID = Number(serverID);
-    // }
-
-    // Implement any other necessary state changes or actions based on the ACK
-    //updateClientState();
-}
-
-// Helper function to update client state
-function updateClientState() {
-    if (isRegistered && authState === 'AUTHORIZED') {
-        console.log('Client fully registered and authorized');
-        // Implement any necessary actions for a fully operational state
-    }
 }
 
 /**
@@ -422,29 +405,6 @@ function sendRegisterPacket(seqMinor = sequenceMinor, seqMajor = 0) {
 }
 
 /**
- * Handle Register response
- */
-function handleRegisterResponse() {
-    return new Promise((resolve, reject) => {
-        // const timeout = setTimeout(() => {
-        //     client.removeListener('message', onMessage);
-        //     reject(new Error('Timeout waiting for Register response'));
-        // }, 5000); // 5 seconds timeout
-
-        function onMessage(msg, rinfo) {
-            clearTimeout(timeout);
-            client.removeListener('message', onMessage);
-
-            //console.log(`Received response from ${rinfo.address}:${rinfo.port} (${msg.length} bytes)`);
-            handlePacket(msg);
-            resolve();
-        }
-
-        client.on('message', onMessage);
-    });
-}
-
-/**
  * Initialize the client
  */
 function initializeClient() {
@@ -470,7 +430,6 @@ async function runClient() {
         sendRegisterPacket();
 
         console.log('Waiting for Register response...');
-        //await handleRegisterResponse();
 
         console.log('Starting Keep Alive loop...');
         // setInterval(() => {
