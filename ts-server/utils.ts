@@ -1,3 +1,6 @@
+import os from 'os';
+
+
 /**
  * Generic function to write a value into a buffer at a specific bit position
  * @param {Buffer} buffer - The buffer to write into
@@ -6,9 +9,9 @@
  * @param {number} numBits - The number of bits to write
  */
 export function writeBits(
-    body: Buffer, 
-    value: number | bigint, 
-    bits: number, 
+    body: Buffer,
+    value: number | bigint,
+    bits: number,
     state: { bitOffset: number; offset: number }
 ): void {
     let { bitOffset, offset } = state;
@@ -38,6 +41,63 @@ export function writeBits(
     // Update the state with new values of offset and bitOffset
     state.bitOffset = bitOffset;
     state.offset = offset;
+}
+
+export function getCurrentTimeMs(): bigint {
+    return BigInt(Math.floor(os.uptime() * 1000));
+}
+
+/**
+ * Function to read a value from a buffer starting at a given bit offset
+ * @param {Buffer} buffer - The buffer to read from
+ * @param {number} bitOffset - The bit position to start reading from
+ * @param {number} numBits - The number of bits to read
+ * @returns {number} - The read value
+ */
+export function readBits(buffer: Buffer, bitOffset: number, numBits: number): number {
+    let byteOffset = Math.floor(bitOffset / 8);
+    let bitPosition = bitOffset % 8;
+    let value = 0;
+
+    for (let i = 0; i < numBits; i++) {
+        const byte = buffer[byteOffset];
+        const bit = (byte >> (7 - bitPosition)) & 1;
+        value = (value << 1) | bit;
+
+        bitPosition++;
+        if (bitPosition === 8) { // Move to the next byte
+            bitPosition = 0;
+            byteOffset++;
+        }
+    }
+
+    return value;
+}
+
+/**
+ * Helper function to create a field reader for a buffer that automatically updates the offset.
+ * @param {Buffer} buffer - The buffer to read from.
+ * @returns {Function} - A function to read fields with automatic offset management.
+ */
+export function createFieldReader(buffer: Buffer) {
+    let offset = 0;
+
+    return function readNextField(numBits: number): number {
+        const value = readBits(buffer, offset, numBits);
+        offset += numBits; // Automatically update offset
+        return value;
+    };
+}
+
+export function readString(buffer: Buffer, bitOffset: number, numBits: number): string {
+    let str = '';
+    for (let i = 0; i < numBits; i += 8) {
+        const charCode = readBits(buffer, bitOffset + i, 8);
+        if (charCode !== 0) {
+            str += String.fromCharCode(charCode);
+        }
+    }
+    return str.trim();
 }
 
 /**
@@ -174,4 +234,12 @@ export enum ECommand {
     ecRecorderStatistic = 78,
     ecPABGroupListEx = 79,
     ecLast = 76 // Adjust according to the highest command
+}
+
+export function getCommandString(commandID: number): string {
+    // Check if the commandID is a valid key in the ECommand enum
+    if (commandID in ECommand) {
+        return ECommand[commandID];
+    }
+    return `UnknownCommand(${commandID})`; // Fallback for unknown commands
 }

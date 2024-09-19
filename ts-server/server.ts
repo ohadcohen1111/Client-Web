@@ -1,9 +1,9 @@
 import dgram, { RemoteInfo } from 'dgram';
 import { toBufferBE } from 'bigint-buffer';
 import { base64Encode, calcResponse } from './cryptoUtils';
-import { getSIPMethod, writeBits as writeBitsUtil, ECommand } from './utils';
-import os from 'os';
+import { getSIPMethod, writeBits as writeBitsUtil, ECommand, getCurrentTimeMs, readBits, readString, createFieldReader, getCommandString } from './utils';
 import { logger } from './logger';
+import { PacketHeader, parseHeader } from './packets/PacketHeader';
 
 // Type definitions
 type PacketState = { offset: number; bitOffset: number };
@@ -40,26 +40,6 @@ let server: Server = { ip: SERVER_IP, port: SERVER_PORT, id: null };
 const client = dgram.createSocket('udp4');
 
 // Utility Functions
-
-function getCurrentTimeMs(): bigint {
-    return BigInt(Math.floor(os.uptime() * 1000));
-}
-
-function readBits(buffer: Buffer, bitOffset: number, numBits: number): number {
-    const binaryString = buffer.toString('binary').split('').map(char => char.charCodeAt(0).toString(2).padStart(8, '0')).join('');
-    return parseInt(binaryString.substr(bitOffset, numBits), 2);
-}
-
-function readString(buffer: Buffer, bitOffset: number, numBits: number): string {
-    let str = '';
-    for (let i = 0; i < numBits; i += 8) {
-        const charCode = readBits(buffer, bitOffset + i, 8);
-        if (charCode !== 0) {
-            str += String.fromCharCode(charCode);
-        }
-    }
-    return str.trim();
-}
 
 function createHeader(command: number, seqMinor: number = sequenceMinor, seqMajor: number = 0): Buffer {
     const header = Buffer.alloc(23);
@@ -126,6 +106,7 @@ function createCPacketAuthorize(
 
     return buffer;
 }
+
 
 function parseCPacketAuthorize(buffer: Buffer, prevCommand: ECommand): CPacketAuthorize {
     let bitOffset = 0;
@@ -205,28 +186,29 @@ function createRegisterPacketBody(): Buffer {
 }
 
 function handlePacket(msg: Buffer) {
+    const header = parseHeader(msg);
+    logger.debug(`Received packet: Command ${getCommandString(header.commandID)} (${msg.length} bytes)`);
     lastSenderId = msg.readBigUInt64BE(12);
-    logger.debug(`Received packet from ${server.ip}:${server.port} with ${msg.length} bytes. SenderId: ${lastSenderId.toString(16)}`);
     printPacket(msg, "received");
-    const command = (msg.readUInt8(22) >> 2) & 0x3F;
-    logger.debug(`Received packet: Command ${command} (${msg.length} bytes)`);
-    if (command === ECommand.ecAuthorize) {
+    if (header.commandID === ECommand.ecAuthorize) {
         const body = msg.slice(23);
         parseCPacketAuthorize(body, previousCommand);
-    } else if (command === ECommand.ecAck) {
+    } else if (header.commandID === ECommand.ecAck) {
         const body = msg.slice(23);
         handleAckPacket(body);
     }
-    previousCommand = command;
+    previousCommand = header.commandID;
 }
 
 function handleAckPacket(packet: Buffer) {
-    let offset = 0;
-    const lastArxSec = readBits(packet, offset, 64);
-    offset += 64;
-    const systemMode = readBits(packet, offset, 8);
-    offset += 8;
-    const serverID = readBits(packet, offset, 64);
+    // Create a field reader for the packet buffer
+    const readField = createFieldReader(packet);
+
+    // Use readField to read fields with automatic offset management
+    const lastArxSec = readField(64);   // Read 64-bit field
+    const systemMode = readField(8);    // Read 8-bit field
+    const serverID = readField(64);     // Read 64-bit field
+    const additionalField = readField(32); // Read additional 32-bit field if needed
 
     logger.info('ACK Packet Contents:', {
         lastArxSec,
@@ -262,10 +244,11 @@ function printPacket(packet: Buffer, senderOrReceiver: string) {
         .map(byte => byte.toString(2).padStart(8, '0'))
         .join(' ');
 
-        console.log('=============');
-        console.log(`The packet that was ${senderOrReceiver} (bits):`);
-        console.log(bitString);
-        console.log('=============');}
+    console.log('=============');
+    console.log(`The packet that was ${senderOrReceiver} (bits):`);
+    console.log(bitString);
+    console.log('=============');
+}
 
 function sendKeepAlive(bChannelAcquisition: boolean = false) {
     const packet = createKeepAlivePacket(bChannelAcquisition);
@@ -289,7 +272,6 @@ function sendRegisterPacket(seqMinor: number = sequenceMinor, seqMajor: number =
 
 function initializeClient() {
     client.on('message', (msg: Buffer, rinfo: RemoteInfo) => {
-        logger.debug(`Received message from ${rinfo.address}:${rinfo.port} (${msg.length} bytes)`);
         handlePacket(msg);
     });
 
