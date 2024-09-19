@@ -27,6 +27,12 @@ const logger = winston.createLogger({
             format: combine(timestamp(), json()),
         }),
 
+        new winston.transports.File({
+            filename: 'logs/app-debug.log',
+            level: 'debug',
+            format: combine(timestamp(), json()),
+        }),
+
         new DailyRotateFile({
             filename: 'logs/combined-%DATE%.log',
             datePattern: 'YYYY-MM-DD-HH-mm-ss',

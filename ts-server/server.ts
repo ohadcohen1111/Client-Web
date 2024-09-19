@@ -206,9 +206,10 @@ function createRegisterPacketBody(): Buffer {
 
 function handlePacket(msg: Buffer) {
     lastSenderId = msg.readBigUInt64BE(12);
+    logger.debug(`Received packet from ${server.ip}:${server.port} with ${msg.length} bytes. SenderId: ${lastSenderId.toString(16)}`);
     printPacket(msg, "received");
     const command = (msg.readUInt8(22) >> 2) & 0x3F;
-    console.log(`Received packet: Command ${command} (${msg.length} bytes)`);
+    logger.debug(`Received packet: Command ${command} (${msg.length} bytes)`);
     if (command === ECommand.ecAuthorize) {
         const body = msg.slice(23);
         parseCPacketAuthorize(body, previousCommand);
@@ -227,23 +228,31 @@ function handleAckPacket(packet: Buffer) {
     offset += 8;
     const serverID = readBits(packet, offset, 64);
 
+    logger.info('ACK Packet Contents:', {
+        lastArxSec,
+        systemMode,
+        serverID
+    });
+
     if (previousCommand === ECommand.ecRegister) {
+        logger.info('Received ACK after registration');
         isRegistered = true;
     } else if (previousCommand === ECommand.ecAuthorize) {
+        logger.info('Received ACK after authorization');
         authState = 'AUTHORIZED';
         sendRegisterPacket(0, 1);
     }
 }
 
 function sendPacket(packet: Buffer) {
-    console.log(`Client -> Server: (${packet.length} bytes)`);
+    logger.debug(`Send packet:(${packet.length} bytes)`);
     printPacket(packet, "sent");
 
     client.send(packet, server.port, server.ip, (err) => {
         if (err) {
-            console.error('Error sending packet:', err);
+            logger.error('Error sending packet:', err);
         } else {
-            console.log(`Packet sent to ${server.ip}:${server.port}`);
+            logger.info(`Packet sent to ${server.ip}:${server.port}`);
         }
     });
 }
@@ -253,14 +262,14 @@ function printPacket(packet: Buffer, senderOrReceiver: string) {
         .map(byte => byte.toString(2).padStart(8, '0'))
         .join(' ');
 
-    console.log('=============');
-    console.log(`The packet that was ${senderOrReceiver} (bits):`);
-    console.log(bitString);
-    console.log('=============');
-}
+        console.log('=============');
+        console.log(`The packet that was ${senderOrReceiver} (bits):`);
+        console.log(bitString);
+        console.log('=============');}
 
 function sendKeepAlive(bChannelAcquisition: boolean = false) {
     const packet = createKeepAlivePacket(bChannelAcquisition);
+    logger.debug(`Sending Keep Alive packet to ${server.ip}:${server.port} with ${packet.length} bytes`);
     sendPacket(packet);
 }
 
@@ -273,17 +282,19 @@ function sendRegisterPacket(seqMinor: number = sequenceMinor, seqMajor: number =
     const header = createHeader(ECommand.ecRegister, seqMinor, seqMajor);
     const body = createRegisterPacketBody();
     const fullPacket = Buffer.concat([header, body]);
+    logger.info('Sending Register Packet');
     sendPacket(fullPacket);
     sequenceMinor++;
 }
 
 function initializeClient() {
     client.on('message', (msg: Buffer, rinfo: RemoteInfo) => {
+        logger.debug(`Received message from ${rinfo.address}:${rinfo.port} (${msg.length} bytes)`);
         handlePacket(msg);
     });
 
     client.on('error', (err: Error) => {
-        console.error('UDP error:', err);
+        logger.error('UDP error:', err);
         client.close();
     });
 }
@@ -292,9 +303,10 @@ async function runClient() {
     initializeClient();
 
     try {
+        logger.info('Starting client and sending initial Register packet...');
         sendRegisterPacket();
     } catch (error) {
-        console.error('Error in client operation:', error);
+        logger.error('Error in client operation:', error);
     }
 }
 
