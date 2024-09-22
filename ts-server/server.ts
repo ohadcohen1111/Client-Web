@@ -26,9 +26,12 @@ type CPacketAuthorize = {
 // Constants
 const SERVER_IP = '82.166.254.181';
 const SERVER_PORT = 25000;
+const MAX_SEQ_MAJOR = 255;
+const MAX_SEQ_MINOR = 255;
 
 // Variables
 let DEVICE_ID: bigint = 0n;
+let sequenceMajor: number = 0;
 let sequenceMinor: number = 0;
 let previousCommand = ECommand.ecRegister;
 let isRegistered = false;
@@ -41,13 +44,26 @@ const client = dgram.createSocket('udp4');
 
 // Utility Functions
 
-function createHeader(command: number, seqMinor: number = sequenceMinor, seqMajor: number = 0): Buffer {
+function incrementSequence() {
+    sequenceMinor++;
+    if (sequenceMinor > MAX_SEQ_MINOR) {
+        sequenceMinor = 0;
+        sequenceMajor = (sequenceMajor + 1) % (MAX_SEQ_MAJOR + 1);
+    }
+}
+
+function resetSequence(seqMajor: number) {
+    sequenceMajor = seqMajor + 1;
+    sequenceMinor = 0;
+}
+
+function createHeader(command: number): Buffer {
     const header = Buffer.alloc(23);
     header.writeUInt32BE(0x0200001C, 0);
     toBufferBE(BigInt(lastSenderId), 8).copy(header, 4);
     toBufferBE(BigInt('0x0DDD2935029EA54F'), 8).copy(header, 12);
-    header.writeUInt8(seqMajor, 20);
-    header.writeUInt8(seqMinor, 21);
+    header.writeUInt8(sequenceMajor, 20);
+    header.writeUInt8(sequenceMinor, 21);
 
     const commandByte = (command << 2) | 0x1;
     header.writeUInt8(commandByte, 22);
@@ -108,7 +124,7 @@ function createCPacketAuthorize(
 }
 
 
-function parseCPacketAuthorize(buffer: Buffer, prevCommand: ECommand): CPacketAuthorize {
+function parseCPacketAuthorize(buffer: Buffer, prevCommand: ECommand) {
     let bitOffset = 0;
     const parsedPacket: CPacketAuthorize = {
         ALGORITHM: readBits(buffer, bitOffset, 4),
@@ -156,12 +172,10 @@ function parseCPacketAuthorize(buffer: Buffer, prevCommand: ECommand): CPacketAu
         parsedPacket.EAUTH_PASS_TYPE
     );
 
-    sequenceMinor++;
     const header = createHeader(ECommand.ecAuthorize);
     const fullPacket = Buffer.concat([header, packetBody]);
 
-    sendPacket(fullPacket);
-    return parsedPacket;
+    sendPacket(fullPacket, ECommand.ecAuthorize);
 }
 
 function createRegisterPacketBody(): Buffer {
@@ -190,12 +204,23 @@ function handlePacket(msg: Buffer) {
     logger.debug(`Received packet: Command ${getCommandString(header.commandID)} (${msg.length} bytes)`);
     lastSenderId = msg.readBigUInt64BE(12);
     printPacket(msg, "received");
-    if (header.commandID === ECommand.ecAuthorize) {
-        const body = msg.slice(23);
-        parseCPacketAuthorize(body, previousCommand);
-    } else if (header.commandID === ECommand.ecAck) {
+
+    // Update server ID if it's not set
+    if (server.id === null) {
+        server.id = msg.readUInt8(20);
+    }
+
+    logger.debug(`  Med M: CtlProtocol.  00074  ${new Date().toLocaleString()}    Rx: ${server.id}.${sequenceMajor > 0 ? 'R' : 'L'}${sequenceMajor}.${header.sequenceMinor}, (${previousCommand}):(${header.commandID}) ${getCommandString(header.commandID)}  ${server.ip}:${server.port}`);
+    incrementSequence();
+
+    if (header.commandID === ECommand.ecAck) {
+        resetSequence(header.sequenceMajor);
         const body = msg.slice(23);
         handleAckPacket(body);
+    }
+    else if (header.commandID === ECommand.ecAuthorize) {
+        const body = msg.slice(23);
+        parseCPacketAuthorize(body, previousCommand);
     }
     previousCommand = header.commandID;
 }
@@ -222,13 +247,15 @@ function handleAckPacket(packet: Buffer) {
     } else if (previousCommand === ECommand.ecAuthorize) {
         logger.info('Received ACK after authorization');
         authState = 'AUTHORIZED';
-        sendRegisterPacket(0, 1);
+        sendRegisterPacket();
     }
 }
 
-function sendPacket(packet: Buffer) {
+function sendPacket(packet: Buffer, command: ECommand) {
     logger.debug(`Send packet:(${packet.length} bytes)`);
     printPacket(packet, "sent");
+
+    logger.debug(`  Med M: CtlProtocol.  00074  ${new Date().toLocaleString()}    Tx: ${server.id || 0}.${sequenceMajor > 0 ? 'R' : 'L'}${sequenceMajor}.${sequenceMinor}, (00):(${command}) ${getCommandString(command)}, ${server.ip}:${server.port}`);
 
     client.send(packet, server.port, server.ip, (err) => {
         if (err) {
@@ -237,6 +264,8 @@ function sendPacket(packet: Buffer) {
             logger.info(`Packet sent to ${server.ip}:${server.port}`);
         }
     });
+
+    incrementSequence();
 }
 
 function printPacket(packet: Buffer, senderOrReceiver: string) {
@@ -253,21 +282,20 @@ function printPacket(packet: Buffer, senderOrReceiver: string) {
 function sendKeepAlive(bChannelAcquisition: boolean = false) {
     const packet = createKeepAlivePacket(bChannelAcquisition);
     logger.debug(`Sending Keep Alive packet to ${server.ip}:${server.port} with ${packet.length} bytes`);
-    sendPacket(packet);
+    sendPacket(packet, ECommand.ecKeepAlive);
 }
 
 function createKeepAlivePacket(bChannelAcquisition: boolean): Buffer {
-    const header = createHeader(4);
+    const header = createHeader(ECommand.ecKeepAlive);
     return header;
 }
 
-function sendRegisterPacket(seqMinor: number = sequenceMinor, seqMajor: number = 0) {
-    const header = createHeader(ECommand.ecRegister, seqMinor, seqMajor);
+function sendRegisterPacket() {
+    const header = createHeader(ECommand.ecRegister);
     const body = createRegisterPacketBody();
     const fullPacket = Buffer.concat([header, body]);
     logger.info('Sending Register Packet');
-    sendPacket(fullPacket);
-    sequenceMinor++;
+    sendPacket(fullPacket, ECommand.ecRegister);
 }
 
 function initializeClient() {
