@@ -220,7 +220,7 @@ function handlePacket(msg: Buffer) {
     }
     else if (header.commandID === ECommand.ecAuthorize) {
         const body = msg.slice(23);
-        parseCPacketAuthorize(body, previousCommand);
+        handleAuthorizePacket(body);
     }
     previousCommand = header.commandID;
 }
@@ -249,6 +249,10 @@ function handleAckPacket(packet: Buffer) {
         authState = 'AUTHORIZED';
         sendRegisterPacket();
     }
+}
+
+function handleAuthorizePacket(packet: Buffer){
+    parseCPacketAuthorize(packet, previousCommand);
 }
 
 function sendPacket(packet: Buffer, command: ECommand) {
