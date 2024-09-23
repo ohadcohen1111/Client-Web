@@ -2,7 +2,7 @@ import { Packet } from './Packet';
 import { PacketHeader } from './PacketHeader';
 import { ECommand, readBits, readString, getSIPMethod, writeBits } from '../utils';
 import { base64Encode, calcResponse } from '../cryptoUtils';
-import { deviceId } from '../constants';
+import { deviceId, password, username } from '../constants';
 
 type CPacketAuthorize = {
     ALGORITHM: number;
@@ -79,14 +79,12 @@ export class PacketAuthorize extends Packet {
         nonceBuffer.writeUInt32BE(this.parsedPacket.NONCE);
         const base64Nonce = base64Encode(nonceBuffer);
 
-        const username = "999000000000075087";
-        const password = "12345";
         const method = getSIPMethod(this.prevCommand);
 
         const response = calcResponse(
-            username,
+            username.value,
             this.parsedPacket.REALM,
-            password,
+            password.value,
             method,
             this.parsedPacket.URI,
             base64Nonce
@@ -134,7 +132,7 @@ export class PacketAuthorize extends Packet {
         buffer.write(response, offset, 16, 'hex');
         offset += 16;
         bitOffset = offset * 8;
-        writeString(username, 63);
+        writeString(username.value, 63);
 
         buffer.writeBigUInt64BE(deviceId.value, offset);
 

@@ -1,5 +1,6 @@
 import { toBufferBE } from 'bigint-buffer';
 import { ECommand } from '../utils';
+import { username } from '../constants';
 
 export class PacketHeader {
   private static lastHeader: PacketHeader | null = null;
@@ -9,7 +10,7 @@ export class PacketHeader {
   constructor(
     public protocolVersion: number = 0x0200001C,
     public recipientId: bigint = 0n,
-    public senderId: bigint = BigInt('0x0DDD2935029EA54F'),
+    public senderId: bigint = BigInt('0x' + BigInt(username.value).toString(16)),
     public sequenceMajor: number = 0,
     public sequenceMinor: number = 0,
     public command: ECommand
