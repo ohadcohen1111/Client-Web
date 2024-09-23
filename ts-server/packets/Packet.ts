@@ -1,13 +1,15 @@
 import { PacketHeader } from './PacketHeader';
+import { ECommand } from '../utils';
 
 abstract class Packet {
-  public header: PacketHeader; // Header field
+  public header: PacketHeader;
 
-  constructor(header: PacketHeader, public data: Uint8Array) {
-    this.header = header; // Assign the header
+  constructor(command: ECommand, header?: PacketHeader, public data?: Uint8Array) {
+    this.header = PacketHeader.getNextHeader(command);
   }
 
-  abstract parseData(): void; // Abstract method to parse specific packet data
+  abstract parseData(): void;
+  abstract toBuffer(): Buffer;
 }
 
-export default Packet;
+export { Packet }
