@@ -8,6 +8,7 @@ import { Packet } from './packets/Packet';
 import { PacketApproved } from './packets/PacketApproved';
 import { PacketKeepAlive } from './packets/PacketKeepAlive';
 import { PacketAck } from './packets/PacketAck';
+import { PacketPabSyncRequest } from './packets/PacketPabSyncRequest';
 
 // Type definitions
 type Server = { ip: string; port: number; id: number | null };
@@ -88,7 +89,7 @@ function handleAckPacket(packet: Buffer) {
 }
 
 function handleApprovedPacket(packet: Buffer) {
-    const header = PacketHeader.fromBuffer(packet.slice(0, 23)); // Assuming header is 23 bytes
+    const header = PacketHeader.fromBuffer(packet.slice(0, 23)); // This updates lastHeader without incrementing
     const approvedPacket = new PacketApproved(header, packet.slice(23));
     approvedPacket.parseData();
 
@@ -98,9 +99,9 @@ function handleApprovedPacket(packet: Buffer) {
 
     logger.info(`Initialized KeepAlive intervals: normal=${keepAliveInterval} seconds, frequent=${frequentKeepAliveInterval} seconds`);
 
-    // Create and send Ack packet
-    // const ackPacket = new PacketAck();
-    // sendPacket(ackPacket)
+    // Create and send PabSyncRequest packet
+    const pabSyncRequestPacket = new PacketPabSyncRequest();
+    sendPacket(pabSyncRequestPacket)
 }
 
 function handleAuthorizePacket(packet: Buffer, previousCommand: ECommand) {
