@@ -7,6 +7,7 @@ import { PacketAuthorize } from './packets/PacketAuthorize';
 import { Packet } from './packets/Packet';
 import { PacketApproved } from './packets/PacketApproved';
 import { PacketKeepAlive } from './packets/PacketKeepAlive';
+import { PacketAck } from './packets/PacketAck';
 
 // Type definitions
 type Server = { ip: string; port: number; id: number | null };
@@ -96,6 +97,10 @@ function handleApprovedPacket(packet: Buffer) {
     frequentKeepAliveInterval = approvedPacket.parsedPacket.freqKeepAlive;
 
     logger.info(`Initialized KeepAlive intervals: normal=${keepAliveInterval} seconds, frequent=${frequentKeepAliveInterval} seconds`);
+
+    // Create and send Ack packet
+    // const ackPacket = new PacketAck();
+    // sendPacket(ackPacket)
 }
 
 function handleAuthorizePacket(packet: Buffer, previousCommand: ECommand) {
