@@ -6,6 +6,7 @@ import { PacketRegister } from './packets/PacketRegister';
 import { PacketAuthorize } from './packets/PacketAuthorize';
 import { Packet } from './packets/Packet';
 import { PacketApproved } from './packets/PacketApproved';
+import { PacketKeepAlive } from './packets/PacketKeepAlive';
 
 // Type definitions
 type Server = { ip: string; port: number; id: number | null };
@@ -21,6 +22,9 @@ let authState: 'UNAUTHORIZED' | 'AUTHORIZED' = 'UNAUTHORIZED';
 let currentServerID = 0;
 let lastSenderId: bigint = 0n;
 let server: Server = { ip: SERVER_IP, port: SERVER_PORT, id: null };
+
+let keepAliveInterval: number = 0;
+let frequentKeepAliveInterval: number = 0;
 
 const client = dgram.createSocket('udp4');
 
@@ -86,6 +90,12 @@ function handleApprovedPacket(packet: Buffer) {
     const header = PacketHeader.fromBuffer(packet.slice(0, 23)); // Assuming header is 23 bytes
     const approvedPacket = new PacketApproved(header, packet.slice(23));
     approvedPacket.parseData();
+
+    // Initialize keep-alive intervals
+    keepAliveInterval = approvedPacket.parsedPacket.keepAlive;
+    frequentKeepAliveInterval = approvedPacket.parsedPacket.freqKeepAlive;
+
+    logger.info(`Initialized KeepAlive intervals: normal=${keepAliveInterval} seconds, frequent=${frequentKeepAliveInterval} seconds`);
 }
 
 function handleAuthorizePacket(packet: Buffer, previousCommand: ECommand) {

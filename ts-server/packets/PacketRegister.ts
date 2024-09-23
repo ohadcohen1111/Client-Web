@@ -9,7 +9,7 @@ class PacketRegister extends Packet {
     }
 
     parseData(): void {
-        // Implement parsing logic for register packet data
+        // no implementation required
     }
 
     toBuffer(): Buffer {
