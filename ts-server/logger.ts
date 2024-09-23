@@ -36,7 +36,7 @@ const logger = winston.createLogger({
         new DailyRotateFile({
             filename: 'logs/combined-%DATE%.log',
             datePattern: 'YYYY-MM-DD-HH-mm-ss',
-            maxFiles: '14d', // Keep log files for the last 14 days
+            maxFiles: '1', // Keep log files for the last 14 days
             format: combine(timestamp(), json()),
         }),
 
@@ -44,7 +44,7 @@ const logger = winston.createLogger({
             filename: 'logs/app-error-%DATE%.log',
             level: 'error',
             datePattern: 'YYYY-MM-DD-HH-mm-ss',
-            maxFiles: '14d', // Keep log files for the last 14 days
+            maxFiles: '1', // Keep log files for the last 14 days
             format: combine(timestamp(), json()),
         }),
     ],
