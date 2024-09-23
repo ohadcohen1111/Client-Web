@@ -5,6 +5,7 @@ import { PacketHeader } from './packets/PacketHeader';
 import { PacketRegister } from './packets/PacketRegister';
 import { PacketAuthorize } from './packets/PacketAuthorize';
 import { Packet } from './packets/Packet';
+import { PacketApproved } from './packets/PacketApproved';
 
 // Type definitions
 type Server = { ip: string; port: number; id: number | null };
@@ -47,6 +48,9 @@ function handlePacket(msg: Buffer) {
         case ECommand.ecAck:
             handleAckPacket(msg.slice(23));
             break;
+        case ECommand.ecApproved:
+            handleApprovedPacket(msg);
+            break;
     }
 }
 
@@ -76,6 +80,12 @@ function handleAckPacket(packet: Buffer) {
         const registerPacket = new PacketRegister();
         sendPacket(registerPacket);
     }
+}
+
+function handleApprovedPacket(packet: Buffer) {
+    const header = PacketHeader.fromBuffer(packet.slice(0, 23)); // Assuming header is 23 bytes
+    const approvedPacket = new PacketApproved(header, packet.slice(23));
+    approvedPacket.parseData();
 }
 
 function handleAuthorizePacket(packet: Buffer, previousCommand: ECommand) {
