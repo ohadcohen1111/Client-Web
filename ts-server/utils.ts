@@ -1,5 +1,5 @@
 import os from 'os';
-
+import { Packet } from './packets/Packet';
 
 /**
  * Generic function to write a value into a buffer at a specific bit position
@@ -242,4 +242,23 @@ export function getCommandString(commandID: number): string {
         return ECommand[commandID];
     }
     return `UnknownCommand(${commandID})`; // Fallback for unknown commands
+}
+
+export function printPacket(packet: Buffer | Packet, action: string) {
+    let bitString: string;
+
+    if (Buffer.isBuffer(packet)) {
+        bitString = Array.from(packet)
+            .map(byte => byte.toString(2).padStart(8, '0'))
+            .join(' ');
+    } else {
+        bitString = Array.from(packet.toBuffer())
+            .map(byte => byte.toString(2).padStart(8, '0'))
+            .join(' ');
+    }
+
+    console.log('=============');
+    console.log(`The packet that was ${action} (bits):`);
+    console.log(bitString);
+    console.log('=============');
 }

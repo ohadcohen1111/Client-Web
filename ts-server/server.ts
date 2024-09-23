@@ -1,5 +1,5 @@
 import dgram, { RemoteInfo } from 'dgram';
-import { ECommand, createFieldReader, getCommandString } from './utils';
+import { ECommand, createFieldReader, getCommandString, printPacket } from './utils';
 import { logger } from './logger';
 import { PacketHeader } from './packets/PacketHeader';
 import { PacketRegister } from './packets/PacketRegister';
@@ -29,7 +29,7 @@ function handlePacket(msg: Buffer) {
     const header = PacketHeader.fromBuffer(msg);
     logger.debug(`Received packet: Command ${getCommandString(header.command)} (${msg.length} bytes)`);
     lastSenderId = msg.readBigUInt64BE(12);
-    printRecievedPacket(msg, "received");
+    printPacket(msg, "received");
 
     // Update server ID if it's not set
     if (server.id === null) {
@@ -91,7 +91,7 @@ function sendPacket(packet: Packet) {
     const buffer = packet.toBuffer();
     logger.debug(`Send packet:(${buffer.length} bytes)`);
 
-    printSentPacket(packet, "sent");
+    printPacket(packet, "sent");
 
     // Log the sent packet
     logger.debug(`  Med M: CtlProtocol.  00074  ${new Date().toLocaleString()}    Tx: ${packet.header.sequenceMajor > 0 ? 'R' : 'L'}${packet.header.sequenceMajor}.${packet.header.sequenceMinor}, (00):(${packet.header.command}) ${getCommandString(packet.header.command)}, ${SERVER_IP}:${SERVER_PORT}`);
@@ -103,28 +103,6 @@ function sendPacket(packet: Packet) {
             logger.info(`Packet sent to ${SERVER_IP}:${SERVER_PORT}`);
         }
     });
-}
-
-function printRecievedPacket(packet: Buffer, senderOrReceiver: string) {
-    const bitString = Array.from(packet)
-        .map(byte => byte.toString(2).padStart(8, '0'))
-        .join(' ');
-
-    console.log('=============');
-    console.log(`The packet that was ${senderOrReceiver} (bits):`);
-    console.log(bitString);
-    console.log('=============');
-}
-
-function printSentPacket(packet: Packet, senderOrReceiver: string) {
-    const bitString = Array.from(packet.toBuffer())
-        .map(byte => byte.toString(2).padStart(8, '0'))
-        .join(' ');
-
-    console.log('=============');
-    console.log(`The packet that was ${senderOrReceiver} (bits):`);
-    console.log(bitString);
-    console.log('=============');
 }
 
 function initializeClient() {
