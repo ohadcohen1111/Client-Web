@@ -4,23 +4,23 @@ import { ECommand, readBits, readString, getSIPMethod, writeBits } from '../util
 import { base64Encode, calcResponse } from '../cryptoUtils';
 import { deviceId, password, username } from '../constants';
 
-type CPacketAuthorize = {
-    ALGORITHM: number;
-    AUTH_METHOD: number;
-    URI: string;
-    RFU1: number;
-    REALM: string;
-    NONCE: number;
-    OPAQUE: number;
-    METHOD: string;
-    RESPONSE: string;
-    USERNAME: string;
-    EAUTH_DEVICE_ID: bigint;
-    EAUTH_PASS_TYPE: number;
-};
+interface IPacketAuthorize {
+    algorithm: number;
+    authMethod: number;
+    uri: string;
+    rfu1: number;
+    realm: string;
+    nonce: number;
+    opaque: number;
+    method: string;
+    response: string;
+    username: string;
+    eauthDeviceId: bigint;
+    eauthPassType: number;
+}
 
 export class PacketAuthorize extends Packet {
-    private parsedPacket: CPacketAuthorize;
+    private parsedPacket: IPacketAuthorize;
     private prevCommand: ECommand;
 
     constructor(prevCommand: ECommand, header?: PacketHeader, data?: Uint8Array) {
@@ -29,20 +29,20 @@ export class PacketAuthorize extends Packet {
         this.parsedPacket = this.initializeParsedPacket();
     }
 
-    private initializeParsedPacket(): CPacketAuthorize {
+    private initializeParsedPacket(): IPacketAuthorize {
         return {
-            ALGORITHM: 0,
-            AUTH_METHOD: 0,
-            URI: '',
-            RFU1: 0,
-            REALM: '',
-            NONCE: 0,
-            OPAQUE: 0,
-            METHOD: '',
-            RESPONSE: '',
-            USERNAME: '',
-            EAUTH_DEVICE_ID: 0n,
-            EAUTH_PASS_TYPE: 0
+            algorithm: 0,
+            authMethod: 0,
+            uri: '',
+            rfu1: 0,
+            realm: '',
+            nonce: 0,
+            opaque: 0,
+            method: '',
+            response: '',
+            username: '',
+            eauthDeviceId: 0n,
+            eauthPassType: 0
         };
     }
 
@@ -53,20 +53,18 @@ export class PacketAuthorize extends Packet {
 
         const buffer = Buffer.from(this.data);
         let bitOffset = 0;
-        this.parsedPacket = {
-            ALGORITHM: readBits(buffer, bitOffset, 4),
-            AUTH_METHOD: readBits(buffer, bitOffset += 4, 4),
-            URI: readString(buffer, bitOffset += 4, 504),
-            RFU1: readBits(buffer, bitOffset += 504, 8),
-            REALM: readString(buffer, bitOffset += 8, 504),
-            NONCE: readBits(buffer, bitOffset += 504, 32),
-            OPAQUE: readBits(buffer, bitOffset += 32, 32),
-            METHOD: readString(buffer, bitOffset += 32, 128),
-            RESPONSE: readString(buffer, bitOffset += 128, 128),
-            USERNAME: readString(buffer, bitOffset += 128, 504),
-            EAUTH_DEVICE_ID: BigInt(readBits(buffer, bitOffset += 504, 64)),
-            EAUTH_PASS_TYPE: readBits(buffer, bitOffset += 64, 4)
-        };
+        this.parsedPacket.algorithm = readBits(buffer, bitOffset, 4);
+        this.parsedPacket.authMethod = readBits(buffer, bitOffset += 4, 4);
+        this.parsedPacket.uri = readString(buffer, bitOffset += 4, 504);
+        this.parsedPacket.rfu1 = readBits(buffer, bitOffset += 504, 8);
+        this.parsedPacket.realm = readString(buffer, bitOffset += 8, 504);
+        this.parsedPacket.nonce = readBits(buffer, bitOffset += 504, 32);
+        this.parsedPacket.opaque = readBits(buffer, bitOffset += 32, 32);
+        this.parsedPacket.method = readString(buffer, bitOffset += 32, 128);
+        this.parsedPacket.response = readString(buffer, bitOffset += 128, 128);
+        this.parsedPacket.username = readString(buffer, bitOffset += 128, 504);
+        this.parsedPacket.eauthDeviceId = BigInt(readBits(buffer, bitOffset += 504, 64));
+        this.parsedPacket.eauthPassType = readBits(buffer, bitOffset += 64, 4);
     }
 
     toBuffer(): Buffer {
@@ -76,17 +74,17 @@ export class PacketAuthorize extends Packet {
 
     private createCPacketAuthorize(): Buffer {
         const nonceBuffer = Buffer.alloc(4);
-        nonceBuffer.writeUInt32BE(this.parsedPacket.NONCE);
+        nonceBuffer.writeUInt32BE(this.parsedPacket.nonce);
         const base64Nonce = base64Encode(nonceBuffer);
 
         const method = getSIPMethod(this.prevCommand);
 
         const response = calcResponse(
             username.value,
-            this.parsedPacket.REALM,
+            this.parsedPacket.realm,
             password.value,
             method,
-            this.parsedPacket.URI,
+            this.parsedPacket.uri,
             base64Nonce
         );
 
@@ -117,15 +115,15 @@ export class PacketAuthorize extends Packet {
             bitOffset = offset * 8;
         }
 
-        writeBits(this.parsedPacket.ALGORITHM, 4);
-        writeBits(this.parsedPacket.AUTH_METHOD, 4);
-        writeString(this.parsedPacket.URI, 63);
+        writeBits(this.parsedPacket.algorithm, 4);
+        writeBits(this.parsedPacket.authMethod, 4);
+        writeString(this.parsedPacket.uri, 63);
         writeBits(0, 8);
-        writeString(this.parsedPacket.REALM, 63);
-        buffer.writeUInt32BE(this.parsedPacket.NONCE, offset);
+        writeString(this.parsedPacket.realm, 63);
+        buffer.writeUInt32BE(this.parsedPacket.nonce, offset);
         offset += 4;
         bitOffset = offset * 8;
-        buffer.writeUInt32BE(this.parsedPacket.OPAQUE, offset);
+        buffer.writeUInt32BE(this.parsedPacket.opaque, offset);
         offset += 4;
         bitOffset = offset * 8;
         writeString(method, 16);

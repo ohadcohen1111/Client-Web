@@ -2,65 +2,65 @@ import { Packet } from './Packet';
 import { PacketHeader } from './PacketHeader';
 import { ECommand, createFieldReader } from '../utils';
 
-interface CPacketApproved {
-    KEEP_ALIVE: number;
-    FREQ_KEEP_ALIVE: number;
-    DIRECT_SESSION_UPDATE: number;
-    PRIVATE_IDLE_TIMEOUT: number;
-    PAGE_ME_TIMEOUT_MESSAGE: number;
-    PTT_RELEASE_TIME: number;
-    PTT_TIME_MAX_ALLOWED: number;
-    KIDNAP_PTT_DISABLED: number;
-    MAX_SILENCE: number;
-    NETWORK_SIGNAL_FLOOR: number;
-    COM_SEQ_IDLE_TIME: number;
-    COM_SEQ_LOCAL_IDLE_TIME: number;
-    RETRY_TIMER: number;
-    NUM_RETRIES: number;
-    NO_SESSION_ENA: number;
-    MAX_FAILED_PACKETS: number;
-    USER_INACTIVITY: number;
-    SERVER_PROTOCOL_VERSION: number;
-    PRIVILEGES: bigint;
-    SECONDARY_SIRE_IP: string;
-    PRIMARY_SIRE_IP: string;
+interface IPacketApproved {
+    keepAlive: number;
+    freqKeepAlive: number;
+    directSessionUpdate: number;
+    privateIdleTimeout: number;
+    pageMeTimeoutMessage: number;
+    pttReleaseTime: number;
+    pttTimeMaxAllowed: number;
+    kidnapPttDisabled: number;
+    maxSilence: number;
+    networkSignalFloor: number;
+    comSeqIdleTime: number;
+    comSeqLocalIdleTime: number;
+    retryTimer: number;
+    numRetries: number;
+    noSessionEna: number;
+    maxFailedPackets: number;
+    userInactivity: number;
+    serverProtocolVersion: number;
+    privileges: bigint;
+    secondarySireIp: string;
+    primarySireIp: string;
 }
 
 export class PacketApproved extends Packet {
-    private parsedPacket: CPacketApproved;
+    private parsedPacket: IPacketApproved;
 
     constructor(header?: PacketHeader, data?: Uint8Array) {
         super(ECommand.ecApproved, header, data);
         this.parsedPacket = this.initializeParsedPacket();
     }
 
-    private initializeParsedPacket(): CPacketApproved {
+    private initializeParsedPacket(): IPacketApproved {
         return {
-            KEEP_ALIVE: 0,
-            FREQ_KEEP_ALIVE: 0,
-            DIRECT_SESSION_UPDATE: 0,
-            PRIVATE_IDLE_TIMEOUT: 0,
-            PAGE_ME_TIMEOUT_MESSAGE: 0,
-            PTT_RELEASE_TIME: 0,
-            PTT_TIME_MAX_ALLOWED: 0,
-            KIDNAP_PTT_DISABLED: 0,
-            MAX_SILENCE: 0,
-            NETWORK_SIGNAL_FLOOR: 0,
-            COM_SEQ_IDLE_TIME: 0,
-            COM_SEQ_LOCAL_IDLE_TIME: 0,
-            RETRY_TIMER: 0,
-            NUM_RETRIES: 0,
-            NO_SESSION_ENA: 0,
-            MAX_FAILED_PACKETS: 0,
-            USER_INACTIVITY: 0,
-            SERVER_PROTOCOL_VERSION: 0,
-            PRIVILEGES: 0n,
-            SECONDARY_SIRE_IP: '',
-            PRIMARY_SIRE_IP: '',
+            keepAlive: 0,
+            freqKeepAlive: 0,
+            directSessionUpdate: 0,
+            privateIdleTimeout: 0,
+            pageMeTimeoutMessage: 0,
+            pttReleaseTime: 0,
+            pttTimeMaxAllowed: 0,
+            kidnapPttDisabled: 0,
+            maxSilence: 0,
+            networkSignalFloor: 0,
+            comSeqIdleTime: 0,
+            comSeqLocalIdleTime: 0,
+            retryTimer: 0,
+            numRetries: 0,
+            noSessionEna: 0,
+            maxFailedPackets: 0,
+            userInactivity: 0,
+            serverProtocolVersion: 0,
+            privileges: 0n,
+            secondarySireIp: '',
+            primarySireIp: '',
         };
     }
 
-    private readIPAddress(value: number): string {
+    private readIpAddress(value: number): string {
         return [
             (value >> 24) & 255,
             (value >> 16) & 255,
@@ -78,27 +78,27 @@ export class PacketApproved extends Packet {
         const readField = createFieldReader(buffer);
 
         this.parsedPacket = {
-            KEEP_ALIVE: readField(16),
-            FREQ_KEEP_ALIVE: readField(16),
-            DIRECT_SESSION_UPDATE: readField(8),
-            PRIVATE_IDLE_TIMEOUT: readField(8),
-            PAGE_ME_TIMEOUT_MESSAGE: readField(8),
-            PTT_RELEASE_TIME: readField(8),
-            PTT_TIME_MAX_ALLOWED: readField(8),
-            KIDNAP_PTT_DISABLED: readField(8),
-            MAX_SILENCE: readField(8),
-            NETWORK_SIGNAL_FLOOR: readField(8),
-            COM_SEQ_IDLE_TIME: readField(8),
-            COM_SEQ_LOCAL_IDLE_TIME: readField(8),
-            RETRY_TIMER: readField(8),
-            NUM_RETRIES: readField(3),
-            NO_SESSION_ENA: readField(1),
-            MAX_FAILED_PACKETS: readField(4),
-            USER_INACTIVITY: readField(10),
-            SERVER_PROTOCOL_VERSION: readField(32),
-            PRIVILEGES: BigInt(readField(64)),
-            SECONDARY_SIRE_IP: this.readIPAddress(readField(32)),
-            PRIMARY_SIRE_IP: this.readIPAddress(readField(32)),
+            keepAlive: readField(16),
+            freqKeepAlive: readField(16),
+            directSessionUpdate: readField(8),
+            privateIdleTimeout: readField(8),
+            pageMeTimeoutMessage: readField(8),
+            pttReleaseTime: readField(8),
+            pttTimeMaxAllowed: readField(8),
+            kidnapPttDisabled: readField(8),
+            maxSilence: readField(8),
+            networkSignalFloor: readField(8),
+            comSeqIdleTime: readField(8),
+            comSeqLocalIdleTime: readField(8),
+            retryTimer: readField(8),
+            numRetries: readField(3),
+            noSessionEna: readField(1),
+            maxFailedPackets: readField(4),
+            userInactivity: readField(10),
+            serverProtocolVersion: readField(32),
+            privileges: BigInt(readField(64)),
+            secondarySireIp: this.readIpAddress(readField(32)),
+            primarySireIp: this.readIpAddress(readField(32)),
         };
     }
 
