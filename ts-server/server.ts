@@ -9,6 +9,8 @@ import { PacketApproved } from './packets/PacketApproved';
 import { PacketKeepAlive } from './packets/PacketKeepAlive';
 import { PacketAck } from './packets/PacketAck';
 import { PacketPabSyncRequest } from './packets/PacketPabSyncRequest';
+import { PacketParser } from './packets/PacketParser';
+import { PacketPabGroupListEx } from './packets/PacketPabGroupListEx';
 
 // Type definitions
 type Server = { ip: string; port: number; id: number | null };
@@ -33,7 +35,11 @@ const client = dgram.createSocket('udp4');
 // Utility Functions
 
 function handlePacket(msg: Buffer) {
-    const header = PacketHeader.fromBuffer(msg);
+    const { header, data } = PacketParser.parsePacket(msg);
+    if (header.command != ECommand.ecAuthorize && header.command != ECommand.ecAck &&
+        header.command != ECommand.ecApproved) {
+        console.log(header.command);
+    }
     logger.debug(`Received packet: Command ${getCommandString(header.command)} (${msg.length} bytes)`);
     lastSenderId = msg.readBigUInt64BE(12);
     printPacket(msg, "received");
@@ -49,14 +55,18 @@ function handlePacket(msg: Buffer) {
     // Handle different packet types
     switch (header.command) {
         case ECommand.ecAuthorize:
-            handleAuthorizePacket(msg, previousCommand);
+            handleAuthorizePacket(header, data, previousCommand);
             break;
         case ECommand.ecAck:
-            handleAckPacket(msg.slice(23));
+            handleAckPacket(data);
             break;
         case ECommand.ecApproved:
-            handleApprovedPacket(msg);
+            handleApprovedPacket(header, data);
             break;
+        case ECommand.ecPABGroupListEx:
+            handlePabGroupListEx(header, data);
+        // case ECommand.ecPABGroupList:
+        //     handlePabGroupList(data);
     }
 }
 
@@ -88,9 +98,10 @@ function handleAckPacket(packet: Buffer) {
     }
 }
 
-function handleApprovedPacket(packet: Buffer) {
-    const header = PacketHeader.fromBuffer(packet.slice(0, 23)); // This updates lastHeader without incrementing
-    const approvedPacket = new PacketApproved(header, packet.slice(23));
+function handleApprovedPacket(header: PacketHeader, data: Buffer) {
+    //const header = PacketHeader.fromBuffer(packet.slice(0, 23)); // This updates lastHeader without incrementing
+    //const approvedPacket = new PacketApproved(header, packet.slice(23));
+    const approvedPacket = new PacketApproved(header, data);
     approvedPacket.parseData();
 
     // Initialize keep-alive intervals
@@ -104,9 +115,15 @@ function handleApprovedPacket(packet: Buffer) {
     sendPacket(pabSyncRequestPacket)
 }
 
-function handleAuthorizePacket(packet: Buffer, previousCommand: ECommand) {
-    const header = PacketHeader.fromBuffer(packet.slice(0, 23)); // Assuming header is 23 bytes
-    const authorizePacket = new PacketAuthorize(previousCommand, header, packet.slice(23));
+function handlePabGroupListEx(header: PacketHeader, data: Buffer) {
+    const packetPabGroupListEx = new PacketPabGroupListEx(header, data);
+    packetPabGroupListEx.parseData();
+}
+
+
+function handleAuthorizePacket(header: PacketHeader, body: Buffer, previousCommand: ECommand) {
+    //const header = PacketHeader.fromBuffer(packet.slice(0, 23)); // Assuming header is 23 bytes
+    const authorizePacket = new PacketAuthorize(previousCommand, header, body);
     authorizePacket.parseData();
     console.log('Received Authorize Packet:', authorizePacket);
     sendPacket(authorizePacket);

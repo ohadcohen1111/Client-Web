@@ -6,7 +6,9 @@ export class PacketHeader {
   private static lastHeader: PacketHeader | null = null;
   private static sequenceMajor: number = 0;
   private static sequenceMinor: number = 0;
-
+  static readonly HEADER_SIZE: number = 23;
+  private static readonly OLD_HEADER_LIMIT: ECommand = 63;
+  
   constructor(
     public protocolVersion: number = 0x0200001C,
     public recipientId: bigint = 0n,
@@ -38,24 +40,25 @@ export class PacketHeader {
   }
 
   toBuffer(): Buffer {
-    const buffer = Buffer.alloc(23);
+    const buffer = Buffer.alloc(PacketHeader.HEADER_SIZE);
     buffer.writeUInt32BE(this.protocolVersion, 0);
     toBufferBE(this.recipientId, 8).copy(buffer, 4);
     toBufferBE(this.senderId, 8).copy(buffer, 12);
     buffer.writeUInt8(this.sequenceMajor, 20);
     buffer.writeUInt8(this.sequenceMinor, 21);
-    buffer.writeUInt8((this.command << 2) | 0x1, 22);
+    buffer.writeUInt8((this.command < PacketHeader.OLD_HEADER_LIMIT ? this.command : PacketHeader.OLD_HEADER_LIMIT) << 2 | 0x1, 22);
     return buffer;
   }
 
   static fromBuffer(buffer: Buffer): PacketHeader {
+    const command = buffer.readUInt8(22) >> 2;
     const header = new PacketHeader(
       buffer.readUInt32BE(0),
       buffer.readBigUInt64BE(4),
       buffer.readBigUInt64BE(12),
       buffer.readUInt8(20),
       buffer.readUInt8(21),
-      buffer.readUInt8(22) >> 2
+      command as ECommand
     );
     PacketHeader.lastHeader = header;
     PacketHeader.sequenceMajor = header.sequenceMajor;
