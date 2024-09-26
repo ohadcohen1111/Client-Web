@@ -17,8 +17,8 @@ export class PacketPabGroupListEx extends Packet {
     private readonly GROUP_NAME_LENGTH = 12;
     private readonly PAB_CHAR = 16; // 16 bits because USE_WIDE_CHAR is defined
 
-    constructor(header: PacketHeader, data: Buffer) {
-        super(ECommand.ecPABGroupListEx, header, data);
+    constructor(header: PacketHeader, data: Buffer, isNewHeaderNeeded: boolean) {
+        super(ECommand.ecPABGroupListEx, header, data, isNewHeaderNeeded);
     }
 
     parseData(): void {

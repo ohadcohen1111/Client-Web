@@ -5,8 +5,8 @@ import { ECommand } from '../utils';
 
 export class PacketPabSyncRequest extends Packet {
 
-    constructor(header?: PacketHeader, data?: Uint8Array) {
-        super(ECommand.ecPABSyncRequest, header, data);
+    constructor(header?: PacketHeader, data?: Uint8Array, isNewHeaderNeeded?: boolean) {
+        super(ECommand.ecPABSyncRequest, header, data, isNewHeaderNeeded);
     }
 
 

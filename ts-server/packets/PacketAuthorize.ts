@@ -23,8 +23,8 @@ export class PacketAuthorize extends Packet {
     private parsedPacket: IPacketAuthorize;
     private prevCommand: ECommand;
 
-    constructor(prevCommand: ECommand, header?: PacketHeader, data?: Uint8Array) {
-        super(ECommand.ecAuthorize, header, data);
+    constructor(prevCommand: ECommand, header?: PacketHeader, data?: Uint8Array, isNewHeaderNeeded?: boolean) {
+        super(ECommand.ecAuthorize, header, data, isNewHeaderNeeded);
         this.prevCommand = prevCommand;
         this.parsedPacket = this.initializeParsedPacket();
     }

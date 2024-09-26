@@ -5,8 +5,8 @@ import { ECommand } from '../utils';
 
 export class PacketKeepAlive extends Packet {
 
-    constructor(header?: PacketHeader, data?: Uint8Array) {
-        super(ECommand.ecKeepAlive, header, data);
+    constructor(header?: PacketHeader, data?: Uint8Array, isNewHeaderNeeded?: boolean) {
+        super(ECommand.ecKeepAlive, header, data, isNewHeaderNeeded);
     }
 
 

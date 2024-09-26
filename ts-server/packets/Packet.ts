@@ -4,16 +4,13 @@ import { ECommand } from '../utils';
 abstract class Packet {
   public header: PacketHeader;
 
-  constructor(command: ECommand, header?: PacketHeader, public data?: Uint8Array) {
-    switch (command) {
-      // to not increase the header
-      case ECommand.ecApproved:
-        //case ...
-        this.header = header!;
-        return;
+  constructor(command: ECommand, header?: PacketHeader, public data?: Uint8Array, isNewHeaderNeeded: boolean = true) {
+    if (isNewHeaderNeeded) {
+      this.header = PacketHeader.getNextHeader(command);
     }
-
-    this.header = PacketHeader.getNextHeader(command);
+    else {
+      this.header = header!;
+    }
   }
 
   abstract parseData(): void;

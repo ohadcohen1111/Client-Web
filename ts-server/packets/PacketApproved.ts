@@ -29,8 +29,8 @@ interface IPacketApproved {
 export class PacketApproved extends Packet {
     public parsedPacket: IPacketApproved;
 
-    constructor(header?: PacketHeader, data?: Uint8Array) {
-        super(ECommand.ecApproved, header, data);
+    constructor(header?: PacketHeader, data?: Uint8Array, isNewHeaderNeeded?: boolean) {
+        super(ECommand.ecApproved, header, data, isNewHeaderNeeded);
         this.parsedPacket = this.initializeParsedPacket();
     }
 

@@ -99,9 +99,7 @@ function handleAckPacket(packet: Buffer) {
 }
 
 function handleApprovedPacket(header: PacketHeader, data: Buffer) {
-    //const header = PacketHeader.fromBuffer(packet.slice(0, 23)); // This updates lastHeader without incrementing
-    //const approvedPacket = new PacketApproved(header, packet.slice(23));
-    const approvedPacket = new PacketApproved(header, data);
+    const approvedPacket = new PacketApproved(header, data, false);
     approvedPacket.parseData();
 
     // Initialize keep-alive intervals
@@ -116,14 +114,13 @@ function handleApprovedPacket(header: PacketHeader, data: Buffer) {
 }
 
 function handlePabGroupListEx(header: PacketHeader, data: Buffer) {
-    const packetPabGroupListEx = new PacketPabGroupListEx(header, data);
+    const packetPabGroupListEx = new PacketPabGroupListEx(header, data, false);
     packetPabGroupListEx.parseData();
     packetPabGroupListEx.printGroups();
 }
 
 
 function handleAuthorizePacket(header: PacketHeader, body: Buffer, previousCommand: ECommand) {
-    //const header = PacketHeader.fromBuffer(packet.slice(0, 23)); // Assuming header is 23 bytes
     const authorizePacket = new PacketAuthorize(previousCommand, header, body);
     authorizePacket.parseData();
     console.log('Received Authorize Packet:', authorizePacket);

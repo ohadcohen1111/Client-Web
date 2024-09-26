@@ -7,8 +7,8 @@ export class PacketAck extends Packet {
     private systemMode: number = 0;  // 1 bit
     private serverId: number = 0;    // 8 bits
 
-    constructor(header?: PacketHeader, data?: Uint8Array) {
-        super(ECommand.ecAck, header, data);
+    constructor(header?: PacketHeader, data?: Uint8Array, isNewHeaderNeeded?: boolean) {
+        super(ECommand.ecAck, header, data, isNewHeaderNeeded);
         if (data) {
             this.parseData();
         }
@@ -20,7 +20,7 @@ export class PacketAck extends Packet {
         }
 
         const view = new DataView(this.data.buffer);
-        
+
         // Read LAST_ARX_SEC (8 bits)
         this.lastArxSec = view.getUint8(0);
 
@@ -32,7 +32,7 @@ export class PacketAck extends Packet {
 
     toBuffer(): Buffer {
         const buffer = Buffer.alloc(3);
-        
+
         // Write LAST_ARX_SEC (8 bits)
         buffer.writeUInt8(this.lastArxSec, 0);
 
