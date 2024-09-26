@@ -118,6 +118,7 @@ function handleApprovedPacket(header: PacketHeader, data: Buffer) {
 function handlePabGroupListEx(header: PacketHeader, data: Buffer) {
     const packetPabGroupListEx = new PacketPabGroupListEx(header, data);
     packetPabGroupListEx.parseData();
+    packetPabGroupListEx.printGroups();
 }
 
 
