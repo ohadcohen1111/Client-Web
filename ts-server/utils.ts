@@ -246,19 +246,23 @@ export function getCommandString(commandID: number): string {
 
 export function printPacket(packet: Buffer | Packet, action: string) {
     let bitString: string;
+    let byteCount: number;
 
     if (Buffer.isBuffer(packet)) {
+        byteCount = packet.length;
         bitString = Array.from(packet)
             .map(byte => byte.toString(2).padStart(8, '0'))
             .join(' ');
     } else {
-        bitString = Array.from(packet.toBuffer())
+        const packetBuffer = packet.toBuffer();
+        byteCount = packetBuffer.length;
+        bitString = Array.from(packetBuffer)
             .map(byte => byte.toString(2).padStart(8, '0'))
             .join(' ');
     }
 
     console.log('=============');
-    console.log(`The packet that was ${action} (bits):`);
+    console.log(`The packet that was ${action} (bits):\nNumber of bytes: ${byteCount}`);
     console.log(bitString);
     console.log('=============');
 }

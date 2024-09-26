@@ -117,6 +117,9 @@ function handlePabGroupListEx(header: PacketHeader, data: Buffer) {
     const packetPabGroupListEx = new PacketPabGroupListEx(header, data, false);
     packetPabGroupListEx.parseData();
     packetPabGroupListEx.printGroups();
+
+    const packetAck = new PacketAck(header);
+    sendPacket(packetAck);
 }
 
 
