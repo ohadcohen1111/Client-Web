@@ -11,6 +11,7 @@ import { PacketAck } from './packets/PacketAck';
 import { PacketPabSyncRequest } from './packets/PacketPabSyncRequest';
 import { PacketParser } from './packets/PacketParser';
 import { PacketPabGroupListEx } from './packets/PacketPabGroupListEx';
+import { PacketPabContactList } from './packets/PacketPabContactList';
 
 // Type definitions
 type Server = { ip: string; port: number; id: number | null };
@@ -65,8 +66,14 @@ function handlePacket(msg: Buffer) {
             break;
         case ECommand.ecPABGroupListEx:
             handlePabGroupListEx(header, data);
-        // case ECommand.ecPABGroupList:
-        //     handlePabGroupList(data);
+            break;
+        case ECommand.ecPABContactList:
+            handlePabContactList(header, data);
+            break;
+        case ECommand.ecPABGroupIDList:
+            handlePabGroupIdList(header, data);
+            break;
+        default:
     }
 }
 
@@ -122,6 +129,23 @@ function handlePabGroupListEx(header: PacketHeader, data: Buffer) {
     sendPacket(packetAck);
 }
 
+function handlePabContactList(header: PacketHeader, data: Buffer) {
+    const packetPabContactList = new PacketPabContactList(header, data, false);
+    packetPabContactList.parseData();
+    packetPabContactList.printContacts();
+
+    const packetAck = new PacketAck(header);
+    sendPacket(packetAck);
+}
+
+function handlePabGroupIdList(header: PacketHeader, data: Buffer) {
+    // const packetPabGroupIdList = new PacketPabGroupIdList(header, data, false);
+    // packetPabGroupIdList.parseData();
+    // packetPabGroupIdList.printContacts();
+
+    const packetAck = new PacketAck(header);
+    sendPacket(packetAck);
+}
 
 function handleAuthorizePacket(header: PacketHeader, body: Buffer, previousCommand: ECommand) {
     const authorizePacket = new PacketAuthorize(previousCommand, header, body);
