@@ -12,6 +12,7 @@ import { PacketPabSyncRequest } from './packets/PacketPabSyncRequest';
 import { PacketParser } from './packets/PacketParser';
 import { PacketPabGroupListEx } from './packets/PacketPabGroupListEx';
 import { PacketPabContactList } from './packets/PacketPabContactList';
+import { PacketPabGroupIdList } from './packets/PacketPabGroupIdList';
 
 // Type definitions
 type Server = { ip: string; port: number; id: number | null };
@@ -72,6 +73,9 @@ function handlePacket(msg: Buffer) {
             break;
         case ECommand.ecPABGroupIDList:
             handlePabGroupIdList(header, data);
+            break;
+        case ECommand.ecPABSyncRequest:
+            handlePabSyncRequest(header, data);
             break;
         default:
     }
@@ -139,9 +143,17 @@ function handlePabContactList(header: PacketHeader, data: Buffer) {
 }
 
 function handlePabGroupIdList(header: PacketHeader, data: Buffer) {
-    // const packetPabGroupIdList = new PacketPabGroupIdList(header, data, false);
-    // packetPabGroupIdList.parseData();
-    // packetPabGroupIdList.printContacts();
+    const packetPabGroupIdList = new PacketPabGroupIdList(header, data, false);
+    packetPabGroupIdList.parseData();
+    packetPabGroupIdList.printInfo();
+
+    const packetAck = new PacketAck(header);
+    sendPacket(packetAck);
+}
+
+function handlePabSyncRequest(header: PacketHeader, data: Buffer) {
+    const packetPabSyncRequest = new PacketPabSyncRequest(header, data, false);
+    packetPabSyncRequest.parseData();
 
     const packetAck = new PacketAck(header);
     sendPacket(packetAck);
