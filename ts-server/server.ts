@@ -13,6 +13,8 @@ import { PacketParser } from './packets/PacketParser';
 import { PacketPabGroupListEx } from './packets/PacketPabGroupListEx';
 import { PacketPabContactList } from './packets/PacketPabContactList';
 import { PacketPabGroupIdList } from './packets/PacketPabGroupIdList';
+import { PacketPabStateList } from './packets/PacketPabStateList';
+import { PacketPabSessionUpdatesList } from './packets/PacketPabSessionUpdatesList';
 
 // Type definitions
 type Server = { ip: string; port: number; id: number | null };
@@ -76,6 +78,12 @@ function handlePacket(msg: Buffer) {
             break;
         case ECommand.ecPABSyncRequest:
             handlePabSyncRequest(header, data);
+            break;
+        case ECommand.ecPABStateList:
+            handlePacketPabStateList(header, data);
+            break;
+        case ECommand.ecPABSessionUpdatesList:
+            handlePacketPabSessionUpdatesList(header, data);
             break;
         default:
     }
@@ -154,6 +162,23 @@ function handlePabGroupIdList(header: PacketHeader, data: Buffer) {
 function handlePabSyncRequest(header: PacketHeader, data: Buffer) {
     const packetPabSyncRequest = new PacketPabSyncRequest(header, data, false);
     packetPabSyncRequest.parseData();
+
+    const packetAck = new PacketAck(header);
+    sendPacket(packetAck);
+}
+
+function handlePacketPabStateList(header: PacketHeader, data: Buffer) {
+    const packetPabStateList = new PacketPabStateList(header, data, false);
+    packetPabStateList.parseData();
+    packetPabStateList.printInfo();
+    
+    const packetAck = new PacketAck(header);
+    sendPacket(packetAck);
+}
+
+function handlePacketPabSessionUpdatesList(header: PacketHeader, data: Buffer) {
+    const packetPabSessionUpdatesList = new PacketPabSessionUpdatesList(header, data, false);
+    packetPabSessionUpdatesList.parseData();
 
     const packetAck = new PacketAck(header);
     sendPacket(packetAck);
