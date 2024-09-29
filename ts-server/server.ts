@@ -15,6 +15,7 @@ import { PacketPabContactList } from './packets/PacketPabContactList';
 import { PacketPabGroupIdList } from './packets/PacketPabGroupIdList';
 import { PacketPabStateList } from './packets/PacketPabStateList';
 import { PacketPabSessionUpdatesList } from './packets/PacketPabSessionUpdatesList';
+import { PacketNewSession } from './packets/PacketNewSession';
 
 // Type definitions
 type Server = { ip: string; port: number; id: number | null };
@@ -84,6 +85,9 @@ function handlePacket(msg: Buffer) {
             break;
         case ECommand.ecPABSessionUpdatesList:
             handlePacketPabSessionUpdatesList(header, data);
+            break;
+        case ECommand.ecNewSession:
+            handleNewSession(header, data);
             break;
         default:
     }
@@ -171,7 +175,7 @@ function handlePacketPabStateList(header: PacketHeader, data: Buffer) {
     const packetPabStateList = new PacketPabStateList(header, data, false);
     packetPabStateList.parseData();
     packetPabStateList.printInfo();
-    
+
     const packetAck = new PacketAck(header);
     sendPacket(packetAck);
 }
@@ -179,6 +183,15 @@ function handlePacketPabStateList(header: PacketHeader, data: Buffer) {
 function handlePacketPabSessionUpdatesList(header: PacketHeader, data: Buffer) {
     const packetPabSessionUpdatesList = new PacketPabSessionUpdatesList(header, data, false);
     packetPabSessionUpdatesList.parseData();
+
+    const packetAck = new PacketAck(header);
+    sendPacket(packetAck);
+}
+
+function handleNewSession(header: PacketHeader, data: Buffer) {
+    const packetNewSession = new PacketNewSession(header, data, false);
+    packetNewSession.parseData();
+    packetNewSession.printInfo();
 
     const packetAck = new PacketAck(header);
     sendPacket(packetAck);
