@@ -18,6 +18,7 @@ import { PacketPabSessionUpdatesList } from './packets/PacketPabSessionUpdatesLi
 import { PacketNewSession } from './packets/PacketNewSession';
 import { PacketPending } from './packets/PacketPending';
 import { PacketAccept } from './packets/PacketAccept';
+import { PacketError } from './packets/PacketError';
 
 // Type definitions
 type Server = { ip: string; port: number; id: number | null };
@@ -31,9 +32,9 @@ let previousCommand = ECommand.ecRegister;
 let isRegistered = false;
 let authState: 'UNAUTHORIZED' | 'AUTHORIZED' = 'UNAUTHORIZED';
 let currentServerID = 0;
+let sessionId: bigint = 0n;
 let lastSenderId: bigint = 0n;
 let server: Server = { ip: SERVER_IP, port: SERVER_PORT, id: null };
-
 let keepAliveInterval: number = 0;
 let frequentKeepAliveInterval: number = 0;
 
@@ -85,6 +86,9 @@ function handlePacket(msg: Buffer) {
         case ECommand.ecPending:
             handlePending(header, data);
             break;
+        case ECommand.ecError:
+            handleError(header, data);
+            break;
         default:
     }
 }
@@ -101,6 +105,10 @@ function handleAckPacket(header: PacketHeader, data: Buffer) {
         authState = 'AUTHORIZED';
         const registerPacket = new PacketRegister();
         sendPacket(registerPacket);
+    }
+    else if (previousCommand === ECommand.ecPending) {
+        const packetAccept = new PacketAccept(header, data, true, sessionId);
+        sendPacket(packetAccept);
     }
 }
 
@@ -175,13 +183,19 @@ function handleNewSession(header: PacketHeader, data: Buffer) {
     const packetNewSession = new PacketNewSession(header, data, false);
     packetNewSession.parseData();
     packetNewSession.printInfo();
-
-    const packetPending = new PacketPending(header, data, true, packetNewSession.sessionId);
+    sessionId = packetNewSession.sessionId;
+    const packetPending = new PacketPending(header, data, true, sessionId);
     sendPacket(packetPending);
 }
 
 function handlePending(header: PacketHeader, data: Buffer) {
     console.log('Pending no implementation');
+}
+
+function handleError(header: PacketHeader, data: Buffer) {
+    const packetError = new PacketError(header, data, false);
+    packetError.parseData();
+    packetError.printInfo();
 }
 
 function handleAuthorizePacket(header: PacketHeader, body: Buffer, previousCommand: ECommand) {

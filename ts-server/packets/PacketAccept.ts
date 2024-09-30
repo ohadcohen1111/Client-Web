@@ -5,8 +5,9 @@ import { ECommand, readBits, writeBits } from '../utils';
 export class PacketAccept extends Packet {
     private sessionId: bigint = 0n;
 
-    constructor(header: PacketHeader, data: Uint8Array, isNewHeaderNeeded: boolean = false) {
+    constructor(header: PacketHeader, data: Uint8Array, isNewHeaderNeeded?: boolean, sessionId?: bigint) {
         super(ECommand.ecAccept, header, data, isNewHeaderNeeded);
+        this.sessionId = sessionId || 0n;
     }
 
     parseData(): void {
