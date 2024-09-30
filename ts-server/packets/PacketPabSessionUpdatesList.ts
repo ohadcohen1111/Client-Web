@@ -12,7 +12,7 @@ export class PacketPabSessionUpdatesList extends Packet {
     private static readonly MAX_RECORDS = 30;
     private records: SessionUpdate[] = [];
 
-    constructor(header: PacketHeader, data: Uint8Array, isNewHeaderNeeded: boolean = false) {
+    constructor(header: PacketHeader, data: Uint8Array, isNewHeaderNeeded: boolean) {
         super(ECommand.ecPABSessionUpdatesList, header, data, isNewHeaderNeeded);
     }
 

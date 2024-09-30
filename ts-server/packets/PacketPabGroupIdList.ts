@@ -7,7 +7,7 @@ export class PacketPabGroupIdList extends Packet {
     private isSession: boolean = false;
     private records: bigint[] = [];
 
-    constructor(header: PacketHeader, data: Uint8Array, isNewHeaderNeeded: boolean = false) {
+    constructor(header: PacketHeader, data: Uint8Array, isNewHeaderNeeded: boolean) {
         super(ECommand.ecPABGroupIDList, header, data, isNewHeaderNeeded);
     }
 

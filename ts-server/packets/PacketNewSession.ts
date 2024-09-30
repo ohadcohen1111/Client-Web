@@ -88,7 +88,7 @@ enum EVocoder {
 }
 
 export class PacketNewSession extends Packet {
-    private sessionId: bigint = 0n;
+    public sessionId: bigint = 0n;
     private ctlIpAddr: number = 0;
     private ctlPort: number = 0;
     private audioIpAddr: number = 0;
@@ -107,7 +107,7 @@ export class PacketNewSession extends Packet {
     private priority: ESessionPriority = ESessionPriority.espUndefined;
     private audioOutputDevice: EAudioOutputDevice_t = EAudioOutputDevice_t.AOD_CURRENT;
 
-    constructor(header: PacketHeader, data: Uint8Array, isNewHeaderNeeded: boolean = false) {
+    constructor(header: PacketHeader, data: Uint8Array, isNewHeaderNeeded: boolean) {
         super(ECommand.ecNewSession, header, data, isNewHeaderNeeded);
     }
 

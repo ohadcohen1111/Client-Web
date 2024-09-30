@@ -19,7 +19,7 @@ export class PacketPabStateList extends Packet {
     private static readonly MAX_RECORDS = 61;
     private records: ContactState[] = [];
 
-    constructor(header: PacketHeader, data: Uint8Array, isNewHeaderNeeded: boolean = false) {
+    constructor(header: PacketHeader, data: Uint8Array, isNewHeaderNeeded: boolean) {
         super(ECommand.ecPABStateList, header, data, isNewHeaderNeeded);
     }
 

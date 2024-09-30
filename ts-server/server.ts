@@ -16,6 +16,8 @@ import { PacketPabGroupIdList } from './packets/PacketPabGroupIdList';
 import { PacketPabStateList } from './packets/PacketPabStateList';
 import { PacketPabSessionUpdatesList } from './packets/PacketPabSessionUpdatesList';
 import { PacketNewSession } from './packets/PacketNewSession';
+import { PacketPending } from './packets/PacketPending';
+import { PacketAccept } from './packets/PacketAccept';
 
 // Type definitions
 type Server = { ip: string; port: number; id: number | null };
@@ -41,18 +43,9 @@ const client = dgram.createSocket('udp4');
 
 function handlePacket(msg: Buffer) {
     const { header, data } = PacketParser.parsePacket(msg);
-    if (header.command != ECommand.ecAuthorize && header.command != ECommand.ecAck &&
-        header.command != ECommand.ecApproved) {
-        console.log(header.command);
-    }
     logger.debug(`Received packet: Command ${getCommandString(header.command)} (${msg.length} bytes)`);
     lastSenderId = msg.readBigUInt64BE(12);
     printPacket(msg, "received");
-
-    // Update server ID if it's not set
-    if (server.id === null) {
-        server.id = msg.readUInt8(20);
-    }
 
     logger.debug(`  Med M: CtlProtocol.  00074  ${new Date().toLocaleString()}    Rx: ${server.id}.${header.sequenceMajor > 0 ? 'R' : 'L'}${header.sequenceMajor}.${header.sequenceMinor}, (${previousCommand}):(${header.command}) ${getCommandString(header.command)}  ${server.ip}:${server.port}`);
     //previousCommand = header.command;
@@ -63,7 +56,7 @@ function handlePacket(msg: Buffer) {
             handleAuthorizePacket(header, data, previousCommand);
             break;
         case ECommand.ecAck:
-            handleAckPacket(data);
+            handleAckPacket(header, data);
             break;
         case ECommand.ecApproved:
             handleApprovedPacket(header, data);
@@ -89,25 +82,16 @@ function handlePacket(msg: Buffer) {
         case ECommand.ecNewSession:
             handleNewSession(header, data);
             break;
+        case ECommand.ecPending:
+            handlePending(header, data);
+            break;
         default:
     }
 }
 
-function handleAckPacket(packet: Buffer) {
-    // Create a field reader for the packet buffer
-    const readField = createFieldReader(packet);
-
-    // Use readField to read fields with automatic offset management
-    const lastArxSec = readField(64);   // Read 64-bit field
-    const systemMode = readField(8);    // Read 8-bit field
-    const serverID = readField(64);     // Read 64-bit field
-    const additionalField = readField(32); // Read additional 32-bit field if needed
-
-    logger.info('ACK Packet Contents:', {
-        lastArxSec,
-        systemMode,
-        serverID
-    });
+function handleAckPacket(header: PacketHeader, data: Buffer) {
+    const packetAck = new PacketAck(header, data, false);
+    packetAck.parseData();
 
     if (previousCommand === ECommand.ecRegister) {
         logger.info('Received ACK after registration');
@@ -115,7 +99,6 @@ function handleAckPacket(packet: Buffer) {
     } else if (previousCommand === ECommand.ecAuthorize) {
         logger.info('Received ACK after authorization');
         authState = 'AUTHORIZED';
-        //sendRegisterPacket();
         const registerPacket = new PacketRegister();
         sendPacket(registerPacket);
     }
@@ -193,8 +176,12 @@ function handleNewSession(header: PacketHeader, data: Buffer) {
     packetNewSession.parseData();
     packetNewSession.printInfo();
 
-    const packetAck = new PacketAck(header);
-    sendPacket(packetAck);
+    const packetPending = new PacketPending(header, data, true, packetNewSession.sessionId);
+    sendPacket(packetPending);
+}
+
+function handlePending(header: PacketHeader, data: Buffer) {
+    console.log('Pending no implementation');
 }
 
 function handleAuthorizePacket(header: PacketHeader, body: Buffer, previousCommand: ECommand) {

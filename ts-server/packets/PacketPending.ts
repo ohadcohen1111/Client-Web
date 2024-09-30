@@ -1,0 +1,45 @@
+import { Packet } from './Packet';
+import { PacketHeader } from './PacketHeader';
+import { ECommand, readBits, writeBits } from '../utils';
+
+export class PacketPending extends Packet {
+    private sessionId: bigint = 0n;
+
+    constructor(header: PacketHeader, data: Uint8Array, isNewHeaderNeeded?: boolean, sessionId?: bigint) {
+        super(ECommand.ecPending, header, data, isNewHeaderNeeded);
+        this.sessionId = sessionId || 0n;
+    }
+
+    parseData(): void {
+        if (!this.data) {
+            throw new Error("No data to parse");
+        }
+
+        const buffer = Buffer.from(this.data);
+        let bitOffset = 0;
+
+        this.sessionId = BigInt(readBits(buffer, bitOffset, 64));
+    }
+
+    toBuffer(): Buffer {
+        const body = Buffer.alloc(8);  // 64 bits = 8 bytes
+        let state = { offset: 0, bitOffset: 0 };
+
+        writeBits(body, this.sessionId, 64, state);
+
+        return Buffer.concat([this.header.toBuffer(), body]);
+    }
+
+    setSessionID(sessionId: bigint): void {
+        this.sessionId = sessionId;
+    }
+
+    getSessionID(): bigint {
+        return this.sessionId;
+    }
+
+    printInfo(): void {
+        console.log("Pending Packet:");
+        console.log(`Session ID: ${this.sessionId}`);
+    }
+}
