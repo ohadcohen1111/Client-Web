@@ -19,18 +19,21 @@ const logger = winston.createLogger({
         new winston.transports.File({
             filename: 'logs/combined.log',
             format: combine(timestamp(), json()),
+            maxFiles: '1', // Keep log files for the last 14 days
         }),
 
         new winston.transports.File({
             filename: 'logs/app-error.log',
             level: 'error',
             format: combine(timestamp(), json()),
+            maxFiles: '1', // Keep log files for the last 14 days
         }),
 
         new winston.transports.File({
             filename: 'logs/app-debug.log',
             level: 'debug',
             format: combine(timestamp(), json()),
+            maxFiles: '1', // Keep log files for the last 14 days
         }),
 
         new DailyRotateFile({
