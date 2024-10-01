@@ -19,6 +19,7 @@ import { PacketNewSession } from './packets/PacketNewSession';
 import { PacketPending } from './packets/PacketPending';
 import { PacketAccept } from './packets/PacketAccept';
 import { PacketError } from './packets/PacketError';
+import { PacketEnablePtt } from './packets/PacketEnablePtt';
 
 // Type definitions
 type Server = { ip: string; port: number; id: number | null };
@@ -88,6 +89,9 @@ function handlePacket(msg: Buffer) {
             break;
         case ECommand.ecError:
             handleError(header, data);
+            break;
+        case ECommand.ecEnablePTT:
+            handleEnablePtt(header, data);
             break;
         default:
     }
@@ -196,6 +200,15 @@ function handleError(header: PacketHeader, data: Buffer) {
     const packetError = new PacketError(header, data, false);
     packetError.parseData();
     packetError.printInfo();
+}
+
+function handleEnablePtt(header: PacketHeader, data: Buffer) {
+    const packetEnablePtt = new PacketEnablePtt(header, data, false);
+    packetEnablePtt.parseData();
+    packetEnablePtt.printInfo();
+
+    const packetAck = new PacketAck(header, data);
+    sendPacket(packetAck);
 }
 
 function handleAuthorizePacket(header: PacketHeader, body: Buffer, previousCommand: ECommand) {
