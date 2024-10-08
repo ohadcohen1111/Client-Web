@@ -1,4 +1,4 @@
-import dgram, { RemoteInfo } from 'dgram';
+import dgram, { Socket, RemoteInfo } from 'dgram';
 import { ECommand, createFieldReader, getCommandString, printPacket } from './utils';
 import { logger } from './logger';
 import { PacketHeader } from './packets/PacketHeader';
@@ -20,13 +20,16 @@ import { PacketPending } from './packets/PacketPending';
 import { PacketAccept } from './packets/PacketAccept';
 import { PacketError } from './packets/PacketError';
 import { PacketEnablePtt } from './packets/PacketEnablePtt';
-
-// Type definitions
-type Server = { ip: string; port: number; id: number | null };
+import { PacketDisablePtt } from './packets/PacketDisablePtt';
+import { PacketCreateAdHoc } from './packets/PacketCreateAdHoc';
 
 // Constants
 const SERVER_IP = '82.166.254.181';
-const SERVER_PORT = 25000;
+const CONTROL_PORT = 25000;
+const AUDIO_PORT = 25001;
+
+// Type definitions
+type Server = { ip: string; controlPort: number; audioPort: number; id: number | null };
 
 // Variables
 let previousCommand = ECommand.ecRegister;
@@ -35,22 +38,23 @@ let authState: 'UNAUTHORIZED' | 'AUTHORIZED' = 'UNAUTHORIZED';
 let currentServerID = 0;
 let sessionId: bigint = 0n;
 let lastSenderId: bigint = 0n;
-let server: Server = { ip: SERVER_IP, port: SERVER_PORT, id: null };
+let server: Server = { ip: SERVER_IP, controlPort: CONTROL_PORT, audioPort: AUDIO_PORT, id: null };
 let keepAliveInterval: number = 0;
 let frequentKeepAliveInterval: number = 0;
 
-const client = dgram.createSocket('udp4');
+// Create two separate UDP sockets
+const controlClient = dgram.createSocket('udp4');
+const audioClient = dgram.createSocket('udp4');
 
 // Utility Functions
 
-function handlePacket(msg: Buffer) {
+function handleControlPacket(msg: Buffer) {
     const { header, data } = PacketParser.parsePacket(msg);
-    logger.debug(`Received packet: Command ${getCommandString(header.command)} (${msg.length} bytes)`);
+    logger.debug(`Received control packet: Command ${getCommandString(header.command)} (${msg.length} bytes)`);
     lastSenderId = msg.readBigUInt64BE(12);
     printPacket(msg, "received");
 
-    logger.debug(`  Med M: CtlProtocol.  00074  ${new Date().toLocaleString()}    Rx: ${server.id}.${header.sequenceMajor > 0 ? 'R' : 'L'}${header.sequenceMajor}.${header.sequenceMinor}, (${previousCommand}):(${header.command}) ${getCommandString(header.command)}  ${server.ip}:${server.port}`);
-    //previousCommand = header.command;
+    logger.debug(`  Med M: CtlProtocol.  00074  ${new Date().toLocaleString()}    Rx: ${server.id}.${header.sequenceMajor > 0 ? 'R' : 'L'}${header.sequenceMajor}.${header.sequenceMinor}, (${previousCommand}):(${header.command}) ${getCommandString(header.command)}  ${server.ip}:${server.controlPort}`);
 
     // Handle different packet types
     switch (header.command) {
@@ -93,8 +97,18 @@ function handlePacket(msg: Buffer) {
         case ECommand.ecEnablePTT:
             handleEnablePtt(header, data);
             break;
+        case ECommand.ecDisablePTT:
+            handleDisablePtt(header, data);
+            break;
         default:
+            logger.warn(`Unhandled control packet type: ${getCommandString(header.command)}`);
     }
+}
+
+function handleAudioPacket(msg: Buffer) {
+    logger.debug(`Received audio packet: (${msg.length} bytes)`);
+    // Implement audio packet handling logic here
+    // This might include decoding the audio data, playing it, or processing it in some way
 }
 
 function handleAckPacket(header: PacketHeader, data: Buffer) {
@@ -108,11 +122,11 @@ function handleAckPacket(header: PacketHeader, data: Buffer) {
         logger.info('Received ACK after authorization');
         authState = 'AUTHORIZED';
         const registerPacket = new PacketRegister();
-        sendPacket(registerPacket);
+        sendControlPacket(registerPacket);
     }
     else if (previousCommand === ECommand.ecPending) {
         const packetAccept = new PacketAccept(header, data, true, sessionId);
-        sendPacket(packetAccept);
+        sendControlPacket(packetAccept);
     }
 }
 
@@ -120,15 +134,13 @@ function handleApprovedPacket(header: PacketHeader, data: Buffer) {
     const approvedPacket = new PacketApproved(header, data, false);
     approvedPacket.parseData();
 
-    // Initialize keep-alive intervals
     keepAliveInterval = approvedPacket.parsedPacket.keepAlive;
     frequentKeepAliveInterval = approvedPacket.parsedPacket.freqKeepAlive;
 
     logger.info(`Initialized KeepAlive intervals: normal=${keepAliveInterval} seconds, frequent=${frequentKeepAliveInterval} seconds`);
 
-    // Create and send PabSyncRequest packet
     const pabSyncRequestPacket = new PacketPabSyncRequest();
-    sendPacket(pabSyncRequestPacket)
+    sendControlPacket(pabSyncRequestPacket)
 }
 
 function handlePabGroupListEx(header: PacketHeader, data: Buffer) {
@@ -137,7 +149,7 @@ function handlePabGroupListEx(header: PacketHeader, data: Buffer) {
     packetPabGroupListEx.printGroups();
 
     const packetAck = new PacketAck(header);
-    sendPacket(packetAck);
+    sendControlPacket(packetAck);
 }
 
 function handlePabContactList(header: PacketHeader, data: Buffer) {
@@ -146,7 +158,7 @@ function handlePabContactList(header: PacketHeader, data: Buffer) {
     packetPabContactList.printContacts();
 
     const packetAck = new PacketAck(header);
-    sendPacket(packetAck);
+    sendControlPacket(packetAck);
 }
 
 function handlePabGroupIdList(header: PacketHeader, data: Buffer) {
@@ -155,7 +167,7 @@ function handlePabGroupIdList(header: PacketHeader, data: Buffer) {
     packetPabGroupIdList.printInfo();
 
     const packetAck = new PacketAck(header);
-    sendPacket(packetAck);
+    sendControlPacket(packetAck);
 }
 
 function handlePabSyncRequest(header: PacketHeader, data: Buffer) {
@@ -163,7 +175,7 @@ function handlePabSyncRequest(header: PacketHeader, data: Buffer) {
     packetPabSyncRequest.parseData();
 
     const packetAck = new PacketAck(header);
-    sendPacket(packetAck);
+    sendControlPacket(packetAck);
 }
 
 function handlePacketPabStateList(header: PacketHeader, data: Buffer) {
@@ -172,7 +184,7 @@ function handlePacketPabStateList(header: PacketHeader, data: Buffer) {
     packetPabStateList.printInfo();
 
     const packetAck = new PacketAck(header);
-    sendPacket(packetAck);
+    sendControlPacket(packetAck);
 }
 
 function handlePacketPabSessionUpdatesList(header: PacketHeader, data: Buffer) {
@@ -180,7 +192,7 @@ function handlePacketPabSessionUpdatesList(header: PacketHeader, data: Buffer) {
     packetPabSessionUpdatesList.parseData();
 
     const packetAck = new PacketAck(header);
-    sendPacket(packetAck);
+    sendControlPacket(packetAck);
 }
 
 function handleNewSession(header: PacketHeader, data: Buffer) {
@@ -189,11 +201,11 @@ function handleNewSession(header: PacketHeader, data: Buffer) {
     packetNewSession.printInfo();
     sessionId = packetNewSession.sessionId;
     const packetPending = new PacketPending(header, data, true, sessionId);
-    sendPacket(packetPending);
+    sendControlPacket(packetPending);
 }
 
 function handlePending(header: PacketHeader, data: Buffer) {
-    console.log('Pending no implementation');
+    logger.info('Pending packet received, no implementation yet');
 }
 
 function handleError(header: PacketHeader, data: Buffer) {
@@ -208,53 +220,91 @@ function handleEnablePtt(header: PacketHeader, data: Buffer) {
     packetEnablePtt.printInfo();
 
     const packetAck = new PacketAck(header, data);
-    sendPacket(packetAck);
+    sendControlPacket(packetAck);
+}
+
+function handleDisablePtt(header: PacketHeader, data: Buffer) {
+    const packetDisablePtt = new PacketDisablePtt(header, data, false);
+    packetDisablePtt.parseData();
+    packetDisablePtt.printInfo();
+
+    const packetAck = new PacketAck(header, data);
+    sendControlPacket(packetAck);
+    const emptyBuffer = Buffer.alloc(0);  // Create an empty buffer
+    sendAudioPacket(emptyBuffer);
+
+    // const packetCreateAdHoc = new PacketCreateAdHoc(header);
+    // sendControlPacket(packetCreateAdHoc);
 }
 
 function handleAuthorizePacket(header: PacketHeader, body: Buffer, previousCommand: ECommand) {
     const authorizePacket = new PacketAuthorize(previousCommand, header, body);
     authorizePacket.parseData();
     console.log('Received Authorize Packet:', authorizePacket);
-    sendPacket(authorizePacket);
+    sendControlPacket(authorizePacket);
 }
 
-function sendPacket(packet: Packet) {
+function sendControlPacket(packet: Packet) {
     previousCommand = packet.header.command;
     const buffer = packet.toBuffer();
-    logger.debug(`Send packet:(${buffer.length} bytes)`);
+    logger.debug(`Sending control packet: (${buffer.length} bytes)`);
 
-    printPacket(packet, "sent");
+    // Restore the original logging format
+    logger.debug(`  Med M: CtlProtocol.  00074  ${new Date().toLocaleString()}    Tx: ${packet.header.sequenceMajor > 0 ? 'R' : 'L'}${packet.header.sequenceMajor}.${packet.header.sequenceMinor}, (00):(${packet.header.command}) ${getCommandString(packet.header.command)}, ${SERVER_IP}:${server.controlPort}`);
 
-    // Log the sent packet
-    logger.debug(`  Med M: CtlProtocol.  00074  ${new Date().toLocaleString()}    Tx: ${packet.header.sequenceMajor > 0 ? 'R' : 'L'}${packet.header.sequenceMajor}.${packet.header.sequenceMinor}, (00):(${packet.header.command}) ${getCommandString(packet.header.command)}, ${SERVER_IP}:${SERVER_PORT}`);
+    sendUDPPacket(controlClient, buffer, server.controlPort, 'control');
+}
 
-    client.send(buffer, SERVER_PORT, SERVER_IP, (err) => {
+function sendAudioPacket(audioData: Buffer) {
+    sendUDPPacket(audioClient, audioData, server.audioPort, 'audio');
+}
+
+function sendUDPPacket(client: Socket, data: Buffer, port: number, type: 'control' | 'audio') {
+    logger.debug(`Sending ${type} packet: (${data.length} bytes)`);
+
+    client.send(data, port, SERVER_IP, (err) => {
         if (err) {
-            logger.error('Error sending packet:', err);
+            logger.error(`Error sending ${type} packet:`, err);
         } else {
-            logger.info(`Packet sent to ${SERVER_IP}:${SERVER_PORT}`);
+            logger.info(`${type.charAt(0).toUpperCase() + type.slice(1)} packet sent to ${SERVER_IP}:${port}`);
         }
     });
 }
 
-function initializeClient() {
-    client.on('message', (msg: Buffer, rinfo: RemoteInfo) => {
-        handlePacket(msg);
+function initializeClients() {
+    controlClient.on('message', (msg: Buffer, rinfo: RemoteInfo) => {
+        handleControlPacket(msg);
     });
 
-    client.on('error', (err: Error) => {
-        logger.error('UDP error:', err);
-        client.close();
+    audioClient.on('message', (msg: Buffer, rinfo: RemoteInfo) => {
+        handleAudioPacket(msg);
+    });
+
+    controlClient.on('error', (err: Error) => {
+        logger.error('Control UDP error:', err);
+        controlClient.close();
+    });
+
+    audioClient.on('error', (err: Error) => {
+        logger.error('Audio UDP error:', err);
+        audioClient.close();
     });
 }
 
 async function runClient() {
-    initializeClient();
+    initializeClients();
 
     try {
         logger.info('Starting client and sending initial Register packet...');
         const registerPacket = new PacketRegister();
-        sendPacket(registerPacket);
+        sendControlPacket(registerPacket);
+
+        // Example of how you might send an audio packet
+        // Note: You'll need to implement the actual audio data generation
+        // setInterval(() => {
+        //     const audioData = generateAudioData(); // Implement this function
+        //     sendAudioPacket(audioData);
+        // }, 20); // Send audio packet every 20ms (adjust as needed)
     } catch (error) {
         logger.error('Error in client operation:', error);
     }
