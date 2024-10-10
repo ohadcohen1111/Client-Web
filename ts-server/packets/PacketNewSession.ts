@@ -1,6 +1,7 @@
 import { Packet } from './Packet';
+import { Parser } from 'binary-parser';
 import { PacketHeader } from './PacketHeader';
-import { ECommand, readBits, writeBits } from '../utils';
+import { ECommand } from '../utils';
 
 enum ESessionType {
     EST_UNDEFINED = 0,
@@ -89,23 +90,48 @@ enum EVocoder {
 
 export class PacketNewSession extends Packet {
     public sessionId: bigint = 0n;
-    private ctlIpAddr: number = 0;
-    private ctlPort: number = 0;
-    private audioIpAddr: number = 0;
-    private audioPort: number = 0;
-    private isInitiator: boolean = false;
-    private isPttEnabled: boolean = false;
-    private isPublic: boolean = false;
-    private isChatRoom: boolean = false;
-    private isBroadcast: boolean = false;
-    private isDirect: boolean = false;
-    private isAdHoc: boolean = false;
-    private vocoder: EVocoder = EVocoder.EV_NONE;
-    private earlyMedia: boolean = false;
-    private sessionFlags: ESessionFlagsMask = ESessionFlagsMask.ESFM_NONE;
-    private initiatorId: bigint = 0n;
-    private priority: ESessionPriority = ESessionPriority.espUndefined;
-    private audioOutputDevice: EAudioOutputDevice_t = EAudioOutputDevice_t.AOD_CURRENT;
+    public initiatorId: bigint = 0n;
+    public ctlIpAddr: number = 0;
+    public ctlPort: number = 0;
+    public audioIpAddr: number = 0;
+    public audioPort: number = 0;
+    public vocoder: EVocoder = EVocoder.EV_NONE;
+    public sessionFlags: ESessionFlagsMask = ESessionFlagsMask.ESFM_NONE;
+    public priority: ESessionPriority = ESessionPriority.espUndefined;
+    public audioOutputDevice: EAudioOutputDevice_t = EAudioOutputDevice_t.AOD_CURRENT;
+    public isInitiator: boolean = false;
+    public isPttEnabled: boolean = false;
+    public isPublic: boolean = false;
+    public isChatRoom: boolean = false;
+    public isBroadcast: boolean = false;
+    public isDirect: boolean = false;
+    public isAdHoc: boolean = false;
+    public earlyMedia: boolean = false;
+
+    private static parser = new Parser()
+        .endianess('big')
+        .uint64('sessionId')
+        .skip(8) // Skip server id (64 bits = 8 bytes)
+        .bit32('ctlIpAddr')
+        .bit16('ctlPort')
+        .bit32('audioIpAddr')
+        .bit16('audioPort')
+        .bit1('isInitiator')
+        .bit1('isPttEnabled')
+        .bit1('isPublic')
+        .bit1('isChatRoom')
+        .bit1('isDirect')
+        .bit1('isAdHoc')
+        .bit16('vocoder')
+        .bit1('earlyMedia')
+        .bit1('rfu1') // Skip RFU1 (1 bit)
+        .bit8('sessionFlags')
+        .uint64('initiatorId')
+        .bit8('priority')
+        .bit8('audioOutputDevice')
+        .skip(3) // Skip RFU2 (8 bits) and RFU3 (16 bits) = 3 bytes
+        .bit1('isBroadcast')
+        .bit7('padding'); // Align to byte boundary
 
     constructor(header: PacketHeader, data: Uint8Array, isNewHeaderNeeded: boolean) {
         super(ECommand.ecNewSession, header, data, isNewHeaderNeeded);
@@ -116,119 +142,85 @@ export class PacketNewSession extends Packet {
             throw new Error("No data to parse");
         }
 
-        const buffer = Buffer.from(this.data);
-        let bitOffset = 0;
+        const parsed = PacketNewSession.parser.parse(this.data);
 
-        this.sessionId = this.readBigIntFromBuffer(buffer, bitOffset, 64);
-        bitOffset += 64;
-        // Skip server id (64 bits)
-        bitOffset += 64;
-        this.ctlIpAddr = readBits(buffer, bitOffset, 32);
-        bitOffset += 32;
-        this.ctlPort = readBits(buffer, bitOffset, 16);
-        bitOffset += 16;
-        this.audioIpAddr = readBits(buffer, bitOffset, 32);
-        bitOffset += 32;
-        this.audioPort = readBits(buffer, bitOffset, 16);
-        bitOffset += 16;
-        this.isInitiator = Boolean(readBits(buffer, bitOffset, 1));
-        bitOffset += 1;
-        this.isPttEnabled = Boolean(readBits(buffer, bitOffset, 1));
-        bitOffset += 1;
-        this.isPublic = Boolean(readBits(buffer, bitOffset, 1));
-        bitOffset += 1;
-        this.isChatRoom = Boolean(readBits(buffer, bitOffset, 1));
-        bitOffset += 1;
-        this.isDirect = Boolean(readBits(buffer, bitOffset, 1));
-        bitOffset += 1;
-        this.isAdHoc = Boolean(readBits(buffer, bitOffset, 1));
-        bitOffset += 1;
-        this.vocoder = readBits(buffer, bitOffset, 16);
-        bitOffset += 16;
-        this.earlyMedia = Boolean(readBits(buffer, bitOffset, 1));
-        bitOffset += 1;
-        // Skip RFU1 (1 bit)
-        bitOffset += 1;
-        this.sessionFlags = readBits(buffer, bitOffset, 8);
-        bitOffset += 8;
-        this.initiatorId = this.readBigIntFromBuffer(buffer, bitOffset, 64);
-        bitOffset += 64;
-        this.priority = readBits(buffer, bitOffset, 8);
-        bitOffset += 8;
-        this.audioOutputDevice = readBits(buffer, bitOffset, 8);
-        bitOffset += 8;
-        // Skip RFU2 (8 bits) and RFU3 (16 bits)
-        bitOffset += 24;
-        this.isBroadcast = Boolean(readBits(buffer, bitOffset, 1));
+        this.sessionId = BigInt(parsed.sessionId);
+        this.ctlIpAddr = parsed.ctlIpAddr;
+        this.ctlPort = parsed.ctlPort;
+        this.audioIpAddr = parsed.audioIpAddr;
+        this.audioPort = parsed.audioPort;
+        this.isInitiator = parsed.isInitiator === 1;
+        this.isPttEnabled = parsed.isPttEnabled === 1;
+        this.isPublic = parsed.isPublic === 1;
+        this.isChatRoom = parsed.isChatRoom === 1;
+        this.isDirect = parsed.isDirect === 1;
+        this.isAdHoc = parsed.isAdHoc === 1;
+        this.vocoder = parsed.vocoder;
+        this.earlyMedia = parsed.earlyMedia === 1;
+        this.sessionFlags = parsed.sessionFlags;
+        this.initiatorId = BigInt(parsed.initiatorId);
+        this.priority = parsed.priority;
+        this.audioOutputDevice = parsed.audioOutputDevice;
+        this.isBroadcast = parsed.isBroadcast === 1;
     }
-
-
 
     toBuffer(): Buffer {
-        const body = Buffer.alloc(28);  // 217 bits = 28 bytes (rounded up)
-        let state = { offset: 0, bitOffset: 0 };
+        const buffer = Buffer.alloc(28); // 217 bits rounded up to nearest byte
+        let offset = 0;
 
-        writeBits(body, this.sessionId, 64, state);
-        writeBits(body, 0n, 64, state);  // server id (64 bits of 0)
-        writeBits(body, this.ctlIpAddr, 32, state);
-        writeBits(body, this.ctlPort, 16, state);
-        writeBits(body, this.audioIpAddr, 32, state);
-        writeBits(body, this.audioPort, 16, state);
-        writeBits(body, this.isInitiator ? 1 : 0, 1, state);
-        writeBits(body, this.isPttEnabled ? 1 : 0, 1, state);
-        writeBits(body, this.isPublic ? 1 : 0, 1, state);
-        writeBits(body, this.isChatRoom ? 1 : 0, 1, state);
-        writeBits(body, this.isDirect ? 1 : 0, 1, state);
-        writeBits(body, this.isAdHoc ? 1 : 0, 1, state);
-        writeBits(body, this.vocoder, 16, state);
-        writeBits(body, this.earlyMedia ? 1 : 0, 1, state);
-        writeBits(body, 0, 1, state);  // RFU1 (1 bit of 0)
-        writeBits(body, this.sessionFlags, 8, state);
-        writeBits(body, this.initiatorId, 64, state);
-        writeBits(body, this.priority, 8, state);
-        writeBits(body, this.audioOutputDevice, 8, state);
-        writeBits(body, 0, 24, state);  // RFU2 (8 bits) and RFU3 (16 bits)
-        writeBits(body, this.isBroadcast ? 1 : 0, 1, state);
+        buffer.writeBigUInt64BE(this.sessionId, offset);
+        offset += 8;
+        buffer.writeBigUInt64BE(0n, offset); // server id
+        offset += 8;
+        buffer.writeUInt32BE(this.ctlIpAddr, offset);
+        offset += 4;
+        buffer.writeUInt16BE(this.ctlPort, offset);
+        offset += 2;
+        buffer.writeUInt32BE(this.audioIpAddr, offset);
+        offset += 4;
+        buffer.writeUInt16BE(this.audioPort, offset);
+        offset += 2;
 
-        return Buffer.concat([this.header.toBuffer(), body]);
+        const flagsByte =
+            (this.isInitiator ? 0x80 : 0) |
+            (this.isPttEnabled ? 0x40 : 0) |
+            (this.isPublic ? 0x20 : 0) |
+            (this.isChatRoom ? 0x10 : 0) |
+            (this.isDirect ? 0x08 : 0) |
+            (this.isAdHoc ? 0x04 : 0);
+        buffer.writeUInt8(flagsByte, offset);
+        offset += 1;
+
+        buffer.writeUInt16BE(this.vocoder, offset);
+        offset += 2;
+
+        const miscByte =
+            (this.earlyMedia ? 0x80 : 0) |
+            (this.isBroadcast ? 0x01 : 0);
+        buffer.writeUInt8(miscByte, offset);
+        offset += 1;
+
+        buffer.writeUInt8(this.sessionFlags, offset);
+        offset += 1;
+        buffer.writeBigUInt64BE(this.initiatorId, offset);
+        offset += 8;
+        buffer.writeUInt8(this.priority, offset);
+        offset += 1;
+        buffer.writeUInt8(this.audioOutputDevice, offset);
+        // The last 3 bytes are left as zeros (RFU2, RFU3, and padding)
+
+        return Buffer.concat([this.header.toBuffer(), buffer]);
     }
-
-    // Getter and setter methods for all fields...
 
     getType(): ESessionType {
         if (this.isPublic) {
-            if (this.isDirect) {
-                return ESessionType.EST_UNDEFINED;
-            } else {
-                if (this.isAdHoc) {
-                    if (this.isChatRoom) {
-                        return ESessionType.EST_UNDEFINED;
-                    } else {
-                        return ESessionType.EST_ADHOC;
-                    }
-                } else {
-                    if (this.isChatRoom) {
-                        return ESessionType.EST_CHATROOM;
-                    } else {
-                        if (this.isBroadcast) {
-                            return ESessionType.EST_ORGANIZATION_BROADCAST;
-                        } else {
-                            return ESessionType.EST_CONFERENCE;
-                        }
-                    }
-                }
-            }
-        } else {
-            if (this.isAdHoc || this.isChatRoom) {
-                return ESessionType.EST_UNDEFINED;
-            } else {
-                if (this.isDirect) {
-                    return ESessionType.EST_PRIVATE_DIRECT;
-                } else {
-                    return ESessionType.EST_PRIVATE_SERVER;
-                }
-            }
+            if (this.isDirect) return ESessionType.EST_UNDEFINED;
+            if (this.isAdHoc) return this.isChatRoom ? ESessionType.EST_UNDEFINED : ESessionType.EST_ADHOC;
+            if (this.isChatRoom) return ESessionType.EST_CHATROOM;
+            return this.isBroadcast ? ESessionType.EST_ORGANIZATION_BROADCAST : ESessionType.EST_CONFERENCE;
         }
+        if (this.isAdHoc || this.isChatRoom) return ESessionType.EST_UNDEFINED;
+        return this.isDirect ? ESessionType.EST_PRIVATE_DIRECT : ESessionType.EST_PRIVATE_SERVER;
     }
 
     printInfo(): void {
@@ -250,16 +242,5 @@ export class PacketNewSession extends Packet {
         console.log(`Priority: ${ESessionPriority[this.priority]}`);
         console.log(`Audio Output Device: ${EAudioOutputDevice_t[this.audioOutputDevice]}`);
         console.log(`Session Type: ${ESessionType[this.getType()]}`);
-    }
-
-    private readBigIntFromBuffer(buffer: Buffer, startBit: number, numBits: number): bigint {
-        let value = BigInt(0);
-        for (let i = 0; i < numBits; i++) {
-            const byteIndex = Math.floor((startBit + i) / 8);
-            const bitIndex = (startBit + i) % 8;
-            const bit = (buffer[byteIndex] & (1 << (7 - bitIndex))) !== 0;
-            value = (value << BigInt(1)) | BigInt(bit ? 1 : 0);
-        }
-        return value;
     }
 }
