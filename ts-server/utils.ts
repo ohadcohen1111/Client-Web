@@ -266,3 +266,16 @@ export function printPacket(packet: Buffer | Packet, action: string) {
     console.log(bitString);
     console.log('=============');
 }
+
+export function bufferToString(buffer: Buffer): string {
+    let str = '';
+    for (let i = 0; i < buffer.length; i++) {
+        const charCode = buffer[i];
+        if (charCode !== 0) {
+            str += String.fromCharCode(charCode);
+        } else {
+            break;
+        }
+    }
+    return str.trim();
+}

@@ -275,7 +275,7 @@ function handleAuthorizePacket(header: PacketHeader, body: Buffer, previousComma
 function sendControlPacket(packet: Packet) {
     previousCommand = packet.header.command;
     const buffer = packet.toBuffer();
-    logger.debug(`Sending control packet: (${buffer.length} bytes)`);
+    //logger.debug(`Sending control packet: (${buffer.length} bytes)`);
 
     // Restore the original logging format
     logger.debug(`  Med M: CtlProtocol.  00074  ${new Date().toLocaleString()}    Tx: ${packet.header.sequenceMajor > 0 ? 'R' : 'L'}${packet.header.sequenceMajor}.${packet.header.sequenceMinor}, (00):(${packet.header.command}) ${getCommandString(packet.header.command)}, ${SERVER_IP}:${server.controlPort}`);

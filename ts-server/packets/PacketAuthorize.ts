@@ -1,6 +1,7 @@
 import { Packet } from './Packet';
 import { PacketHeader } from './PacketHeader';
-import { ECommand, readBits, readString, getSIPMethod, writeBits } from '../utils';
+import { Parser } from 'binary-parser';
+import { ECommand, getSIPMethod, bufferToString } from '../utils';
 import { base64Encode, calcResponse } from '../cryptoUtils';
 import { deviceId, password, username } from '../constants';
 
@@ -20,7 +21,7 @@ interface IPacketAuthorize {
 }
 
 export class PacketAuthorize extends Packet {
-    private parsedPacket: IPacketAuthorize;
+    public parsedPacket: IPacketAuthorize;
     private prevCommand: ECommand;
 
     constructor(prevCommand: ECommand, header?: PacketHeader, data?: Uint8Array, isNewHeaderNeeded?: boolean) {
@@ -46,25 +47,39 @@ export class PacketAuthorize extends Packet {
         };
     }
 
+    private static parser = new Parser()
+        .endianess('big')
+        .bit4('algorithm')
+        .bit4('uri')
+        .buffer('authMethod', { length: 63 })
+        .bit8('rfu1')
+        .buffer('realm', { length: 63 })
+        .bit32('nonce')
+        .bit32('opaque')
+        .bit1('method', { length: 16 })
+        .buffer('response', { length: 16 })
+        .buffer('username', { length: 63 })
+        .uint64('eauthDeviceId')
+        .bit4('eauthPassType')
+
     parseData(): void {
         if (!this.data) {
             throw new Error("No data to parse");
         }
+        const parsed = PacketAuthorize.parser.parse(this.data);
 
-        const buffer = Buffer.from(this.data);
-        let bitOffset = 0;
-        this.parsedPacket.algorithm = readBits(buffer, bitOffset, 4);
-        this.parsedPacket.authMethod = readBits(buffer, bitOffset += 4, 4);
-        this.parsedPacket.uri = readString(buffer, bitOffset += 4, 504);
-        this.parsedPacket.rfu1 = readBits(buffer, bitOffset += 504, 8);
-        this.parsedPacket.realm = readString(buffer, bitOffset += 8, 504);
-        this.parsedPacket.nonce = readBits(buffer, bitOffset += 504, 32);
-        this.parsedPacket.opaque = readBits(buffer, bitOffset += 32, 32);
-        this.parsedPacket.method = readString(buffer, bitOffset += 32, 128);
-        this.parsedPacket.response = readString(buffer, bitOffset += 128, 128);
-        this.parsedPacket.username = readString(buffer, bitOffset += 128, 504);
-        this.parsedPacket.eauthDeviceId = BigInt(readBits(buffer, bitOffset += 504, 64));
-        this.parsedPacket.eauthPassType = readBits(buffer, bitOffset += 64, 4);
+        this.parsedPacket.algorithm = parsed.algorithm;
+        this.parsedPacket.authMethod = parsed.authMethod;
+        this.parsedPacket.uri = bufferToString(parsed.uri);
+        this.parsedPacket.rfu1 = parsed.rfu1;
+        this.parsedPacket.realm = bufferToString(parsed.realm);
+        this.parsedPacket.nonce = parsed.nonce;
+        this.parsedPacket.opaque = parsed.opaque;
+        this.parsedPacket.method = bufferToString(parsed.method);
+        this.parsedPacket.response = bufferToString(parsed.response);
+        this.parsedPacket.username = bufferToString(parsed.username);
+        this.parsedPacket.eauthDeviceId = BigInt(parsed.eauthDeviceId);
+        this.parsedPacket.eauthPassType = parsed.eauthPassType;
     }
 
     toBuffer(): Buffer {
