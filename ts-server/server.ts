@@ -41,6 +41,7 @@ let lastSenderId: bigint = 0n;
 let server: Server = { ip: SERVER_IP, controlPort: CONTROL_PORT, audioPort: AUDIO_PORT, id: null };
 let keepAliveInterval: number = 0;
 let frequentKeepAliveInterval: number = 0;
+let keepAliveTimer: NodeJS.Timeout | null = null;
 
 // Create two separate UDP sockets
 const controlClient = dgram.createSocket('udp4');
@@ -137,10 +138,35 @@ function handleApprovedPacket(header: PacketHeader, data: Buffer) {
     keepAliveInterval = approvedPacket.parsedPacket.keepAlive;
     frequentKeepAliveInterval = approvedPacket.parsedPacket.freqKeepAlive;
 
-    logger.info(`Initialized KeepAlive intervals: normal=${keepAliveInterval} seconds, frequent=${frequentKeepAliveInterval} seconds`);
+    // logger.info(`Initialized KeepAlive intervals: normal=${keepAliveInterval} seconds, frequent=${frequentKeepAliveInterval} seconds`);
+
+    
+    // // Start the KeepAlive timer
+    // startKeepAliveTimer();
 
     const pabSyncRequestPacket = new PacketPabSyncRequest();
     sendControlPacket(pabSyncRequestPacket)
+}
+
+// Add these new functions
+function startKeepAliveTimer() {
+    // Clear any existing timer
+    if (keepAliveTimer) {
+        clearInterval(keepAliveTimer);
+    }
+
+    // Start a new timer
+    keepAliveTimer = setInterval(() => {
+        sendKeepAlivePacket();
+    }, frequentKeepAliveInterval * 1000); // Convert seconds to milliseconds
+
+    logger.info(`KeepAlive timer started. Interval: ${keepAliveInterval} seconds`);
+}
+
+function sendKeepAlivePacket() {
+    logger.debug('Sending KeepAlive packet');
+    const keepAlivePacket = new PacketKeepAlive();
+    sendControlPacket(keepAlivePacket);
 }
 
 function handlePabGroupListEx(header: PacketHeader, data: Buffer) {
@@ -176,6 +202,8 @@ function handlePabSyncRequest(header: PacketHeader, data: Buffer) {
 
     const packetAck = new PacketAck(header);
     sendControlPacket(packetAck);
+
+    const packetKeepAlive = new PacketKeepAlive();
 }
 
 function handlePacketPabStateList(header: PacketHeader, data: Buffer) {
