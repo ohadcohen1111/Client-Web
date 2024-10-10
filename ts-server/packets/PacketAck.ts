@@ -1,46 +1,57 @@
 import { Packet } from './Packet';
 import { PacketHeader } from './PacketHeader';
 import { ECommand } from '../utils';
+import { Parser } from 'binary-parser';
+
+interface IPacketAck {
+    lastArxSec: number;  // 8 bits
+    systemMode: number;  // 1 bit
+    serverId: number;    // 8 bits
+}
 
 export class PacketAck extends Packet {
-    private lastArxSec: number = 0;  // 8 bits
-    private systemMode: number = 0;  // 1 bit
-    private serverId: number = 0;    // 8 bits
+    public parsedPacket: IPacketAck;
 
     constructor(header?: PacketHeader, data?: Uint8Array, isNewHeaderNeeded?: boolean) {
         super(ECommand.ecAck, header, data, isNewHeaderNeeded);
-        if (data) {
-            this.parseData();
-        }
+        this.parsedPacket = this.initializeParsedPacket();
     }
+    private initializeParsedPacket(): IPacketAck {
+        return {
+            lastArxSec: 0,
+            systemMode: 0,
+            serverId: 0,
+        };
+    }
+    private static parser = new Parser()
+        .uint8('lastArxSec')
+        .bit1('systemMode')
+        .bit7('serverIdHigh')
+        .bit1('serverIdLow');
 
     parseData(): void {
-        if (!this.data || this.data.length < 3) {
+        if (!this.data) {
             throw new Error("Invalid data for PacketAck");
         }
 
-        const view = new DataView(this.data.buffer);
+        const parsed = PacketAck.parser.parse(this.data);
 
-        // Read LAST_ARX_SEC (8 bits)
-        this.lastArxSec = view.getUint8(0);
-
-        // Read SYSTEM_MODE (1 bit) and SERVER_ID (8 bits)
-        const combinedByte = view.getUint8(1);
-        this.systemMode = (combinedByte & 0x80) >> 7;  // Most significant bit
-        this.serverId = ((combinedByte & 0x7F) << 1) | (view.getUint8(2) >> 7);
+        this.parsedPacket.lastArxSec = parsed.lastArxSec;
+        this.parsedPacket.systemMode = parsed.systemMode;
+        this.parsedPacket.serverId = (parsed.serverIdHigh << 1) | parsed.serverIdLow;
     }
 
     toBuffer(): Buffer {
         const buffer = Buffer.alloc(3);
 
         // Write LAST_ARX_SEC (8 bits)
-        buffer.writeUInt8(this.lastArxSec, 0);
+        buffer.writeUInt8(this.parsedPacket.lastArxSec, 0);
 
         // Write SYSTEM_MODE (1 bit) and first 7 bits of SERVER_ID
-        buffer.writeUInt8(((this.systemMode & 0x01) << 7) | ((this.serverId >> 1) & 0x7F), 1);
+        buffer.writeUInt8(((this.parsedPacket.systemMode & 0x01) << 7) | ((this.parsedPacket.serverId >> 1) & 0x7F), 1);
 
         // Write last bit of SERVER_ID
-        buffer.writeUInt8((this.serverId & 0x01) << 7, 2);
+        buffer.writeUInt8((this.parsedPacket.serverId & 0x01) << 7, 2);
 
         return Buffer.concat([this.header.toBuffer(), buffer]);
     }
