@@ -22,6 +22,7 @@ import { PacketError } from './packets/PacketError';
 import { PacketEnablePtt } from './packets/PacketEnablePtt';
 import { PacketDisablePtt } from './packets/PacketDisablePtt';
 import { PacketCreateAdHoc } from './packets/PacketCreateAdHoc';
+import { PacketAudio } from './packets/PacketAudio';
 
 // Constants
 const SERVER_IP = '82.166.254.181';
@@ -101,6 +102,9 @@ function handleControlPacket(msg: Buffer) {
         case ECommand.ecDisablePTT:
             handleDisablePtt(header, data);
             break;
+        case ECommand.ecKeepAlive:
+            handleKeepAlive(header, data)
+            break;
         default:
             logger.warn(`Unhandled control packet type: ${getCommandString(header.command)}`);
     }
@@ -110,6 +114,9 @@ function handleAudioPacket(msg: Buffer) {
     logger.debug(`Received audio packet: (${msg.length} bytes)`);
     // Implement audio packet handling logic here
     // This might include decoding the audio data, playing it, or processing it in some way
+
+    const packet = new PacketAudio(msg);
+    console.log(packet.toString());
 }
 
 function handleAckPacket(header: PacketHeader, data: Buffer) {
@@ -127,8 +134,28 @@ function handleAckPacket(header: PacketHeader, data: Buffer) {
     }
     else if (previousCommand === ECommand.ecPending) {
         const packetAccept = new PacketAccept(header, data, true, sessionId);
+        packetAccept.header.sequenceMajor = 3;
+        packetAccept.header.sequenceMinor = 0;
         sendControlPacket(packetAccept);
+
+        // const emptyBuffer = Buffer.alloc(0);  // Create an empty buffer
+        // sendAudioPacket(emptyBuffer);
+
+        // Create the specific binary buffer
+        const specificBuffer = createSpecificBuffer();
+        sendAudioPacket(specificBuffer);
+
+        //const packetAudio = new PacketAudio();
     }
+}
+
+function createSpecificBuffer(): Buffer {
+    const binaryString = '00000010 00000000 00000000 00011100 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000111 00001101 11011101 00101001 00110101 00000010 10011110 10100101 01001111 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000001 00000000 00000000 00000000 00000000';
+
+    // Remove spaces and convert to byte array
+    const bytes = binaryString.replace(/\s/g, '').match(/.{8}/g)!.map(byte => parseInt(byte, 2));
+
+    return Buffer.from(bytes);
 }
 
 function handleApprovedPacket(header: PacketHeader, data: Buffer) {
@@ -140,9 +167,9 @@ function handleApprovedPacket(header: PacketHeader, data: Buffer) {
 
     // logger.info(`Initialized KeepAlive intervals: normal=${keepAliveInterval} seconds, frequent=${frequentKeepAliveInterval} seconds`);
 
-    
+
     // // Start the KeepAlive timer
-    // startKeepAliveTimer();
+    startKeepAliveTimer();
 
     const pabSyncRequestPacket = new PacketPabSyncRequest();
     sendControlPacket(pabSyncRequestPacket)
@@ -166,6 +193,8 @@ function startKeepAliveTimer() {
 function sendKeepAlivePacket() {
     logger.debug('Sending KeepAlive packet');
     const keepAlivePacket = new PacketKeepAlive();
+    keepAlivePacket.header.sequenceMajor = 2;
+    keepAlivePacket.header.sequenceMinor = 0;
     sendControlPacket(keepAlivePacket);
 }
 
@@ -258,11 +287,16 @@ function handleDisablePtt(header: PacketHeader, data: Buffer) {
 
     const packetAck = new PacketAck(header, data);
     sendControlPacket(packetAck);
-    const emptyBuffer = Buffer.alloc(0);  // Create an empty buffer
-    sendAudioPacket(emptyBuffer);
+    // const emptyBuffer = Buffer.alloc(0);  // Create an empty buffer
+    // sendAudioPacket(emptyBuffer);
 
     // const packetCreateAdHoc = new PacketCreateAdHoc(header);
     // sendControlPacket(packetCreateAdHoc);
+}
+
+function handleKeepAlive(header: PacketHeader, data: Buffer) {
+    const packetAck = new PacketAck(header, data);
+    sendControlPacket(packetAck);
 }
 
 function handleAuthorizePacket(header: PacketHeader, body: Buffer, previousCommand: ECommand) {

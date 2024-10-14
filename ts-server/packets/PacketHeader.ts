@@ -1,6 +1,6 @@
 import { toBufferBE } from 'bigint-buffer';
 import { ECommand } from '../utils';
-import { username } from '../constants';
+import { username, protocolVersion as proVersion } from '../constants';
 
 export class PacketHeader {
   private static lastHeader: PacketHeader | null = null;
@@ -8,9 +8,9 @@ export class PacketHeader {
   private static sequenceMinor: number = 0;
   static readonly HEADER_SIZE: number = 23;
   private static readonly OLD_HEADER_LIMIT: ECommand = 63;
-  
+
   constructor(
-    public protocolVersion: number = 0x0200001C,
+    public protocolVersion: number = proVersion.value,
     public recipientId: bigint = 0n,
     public senderId: bigint = BigInt('0x' + BigInt(username.value).toString(16)),
     public sequenceMajor: number = 0,

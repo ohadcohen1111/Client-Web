@@ -9,3 +9,7 @@ export const username = {
 export const password = {
     value: "12345"
 }
+
+export const protocolVersion = {
+    value: 0x0200001C
+}
