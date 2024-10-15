@@ -1,6 +1,7 @@
 import { spawn, ChildProcess } from "child_process";
-import { Readable, PassThrough } from "stream";
+import { Readable } from "stream";
 import { logger } from '../logger';
+import WebSocket from 'ws';
 
 enum Vocoder {
   Amr5_15 = 9,
@@ -8,6 +9,16 @@ enum Vocoder {
 }
 
 class AudioDecompressor {
+  private static wsServer: WebSocket.Server;
+
+  public static initialize(server: any) {
+    this.wsServer = new WebSocket.Server({ server });
+    
+    this.wsServer.on('connection', (ws) => {
+      logger.info('New WebSocket connection established');
+    });
+  }
+
   private static bufferToStream(buffer: Buffer): Readable {
     return new Readable({
       read() {
@@ -25,6 +36,23 @@ class AudioDecompressor {
     outputBuffer.set(Buffer.from(amrHeader));
     outputBuffer.set(inputBuffer, amrHeader.length);
     return outputBuffer;
+  }
+
+  public static async decompressAndSendAudio(inputBuffer: Buffer, vocoder: Vocoder): Promise<void> {
+    try {
+      const decompressedAudio = await this.decompressAudio(inputBuffer, vocoder);
+      this.sendAudioToClients(decompressedAudio);
+    } catch (error) {
+      logger.error('Error processing audio packet:', error);
+    }
+  }
+
+  private static sendAudioToClients(audioBuffer: Buffer): void {
+    this.wsServer.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(audioBuffer);
+      }
+    });
   }
 
   public static async decompressAudio(inputBuffer: Buffer, vocoder: Vocoder): Promise<Buffer> {

@@ -29,6 +29,13 @@ import * as os from 'os';
 import * as path from 'path';
 import { promises as fs } from 'fs';
 
+import express from 'express';
+import http from 'http';
+
+const app = express();
+const server1 = http.createServer(app);
+AudioDecompressor.initialize(server1);
+
 // Constants
 const SERVER_IP = '82.166.254.181';
 const CONTROL_PORT = 25000;
@@ -117,34 +124,13 @@ function handleControlPacket(msg: Buffer) {
 
 async function handleAudioPacket(msg: Buffer) {
     logger.debug(`Received audio packet: (${msg.length} bytes)`);
-    // Implement audio packet handling logic here
-    // This might include decoding the audio data, playing it, or processing it in some way
 
     const packet = new PacketAudio(msg);
     console.log(packet.toString());
 
     try {
-        // Assuming packet.parsedPacket.vocoder is the vocoder value
         const vocoder = packet.parsedPacket.vocoder === 9 ? Vocoder.Amr5_15 : Vocoder.Amr12_2;
-
-        // Decompress the audio
-        const decompressedAudio = await AudioDecompressor.decompressAudio(packet.parsedPacket.audioData, vocoder);
-
-        // Use the system's temporary directory
-        const tempDir = os.tmpdir();
-        const tempFilePath = path.join(tempDir, `decompressed_audio_${Date.now()}.wav`);
-
-        // Save the decompressed audio to a temporary file
-        await fs.writeFile(tempFilePath, decompressedAudio);
-
-        logger.info(`Saved decompressed audio to: ${tempFilePath}`);
-
-        // Play the audio
-        await play(tempFilePath);
-
-        // Optionally, delete the temporary file after playing
-        await fs.unlink(tempFilePath);
-
+        await AudioDecompressor.decompressAndSendAudio(packet.parsedPacket.audioData, vocoder);
     } catch (error) {
         logger.error('Error processing audio packet:', error);
         if (error instanceof Error) {
@@ -401,6 +387,12 @@ async function runClient() {
         //     const audioData = generateAudioData(); // Implement this function
         //     sendAudioPacket(audioData);
         // }, 20); // Send audio packet every 20ms (adjust as needed)
+
+        // Start the HTTP server
+        server1.listen(3000, () => {
+            console.log('HTTP Server is running on port 3000');
+        });
+
     } catch (error) {
         logger.error('Error in client operation:', error);
     }
